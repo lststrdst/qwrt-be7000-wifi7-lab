@@ -43,10 +43,20 @@ class RepositoryTests(unittest.TestCase):
         russian = (ROOT / "README.md").read_text(encoding="utf-8")
         english = (ROOT / "README.en.md").read_text(encoding="utf-8")
         self.assertIn("## Зачем мне это нужно", russian)
-        self.assertIn("Я разработчик", russian)
+        self.assertIn("безопасному возврату роутера", russian)
         self.assertIn("[English](README.en.md)", russian)
         self.assertIn("[Русский](README.md)", english)
         self.assertIn("## Why I built this", english)
+
+    def test_recovery_runbook_documents_known_safe_state(self) -> None:
+        recovery = (ROOT / "docs/RECOVERY.md").read_text(encoding="utf-8")
+        self.assertIn("UART 1,8 В", recovery)
+        self.assertIn("0x65000", recovery)
+        self.assertIn("bdf_pci2=0x2", recovery)
+        self.assertIn("ART", recovery)
+        self.assertIn("MIBIB", recovery)
+        self.assertNotIn("mtd erase", recovery)
+        self.assertNotIn("mtd write", recovery)
 
     def test_split_and_rollback_gpio_states_are_inverse(self) -> None:
         split = self.profile["target"]["split_hardware"]

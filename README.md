@@ -4,8 +4,8 @@
 
 [![Тесты](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
-Я разработчик и собираю здесь нормальную поддержку Wi-Fi 7/MLO для Xiaomi
-BE7000 (RC06) на QWRT R26.02.02 / QSDK 12.5.
+Проект посвящён поддержке Wi-Fi 7/MLO для Xiaomi BE7000 (RC06) на QWRT
+R26.02.02 / QSDK 12.5 и безопасному возврату роутера в рабочее состояние.
 
 > Это не официальный форк исходников QWRT, не готовая прошивка и не кнопка
 > «включить Wi-Fi 7». Публичного репозитория исходников конкретной сборки
@@ -102,6 +102,7 @@ python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 - [`openwrt-package`](openwrt-package) — исходник безопасного OpenWrt-пакета.
 - [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — заводская последовательность.
 - [`docs/SAFETY.md`](docs/SAFETY.md) — требования к аппаратному этапу.
+- [`docs/RECOVERY.md`](docs/RECOVERY.md) — инструкция по восстановлению для администраторов.
 - [`README.en.md`](README.en.md) — английская версия описания.
 
 ## Ссылки
