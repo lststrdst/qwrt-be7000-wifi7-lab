@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Never commit device or vendor artifacts.
+artifacts/
+backups/
+caldata*.bin
+*.bin
+*.ubi
+*.img
+*.ipk
+*.rar
+*.tar.gz
+*.key
+*.conf.local

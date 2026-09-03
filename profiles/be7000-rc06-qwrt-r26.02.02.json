@@ -1,0 +1,35 @@
+{
+  "name": "xiaomi-be7000-rc06-qwrt-r26.02.02-mlo-lab",
+  "board_model": "xiaomi,be7000",
+  "qca_board_name": "ap-al02-c6",
+  "target": {
+    "bdf_pci2": "0x1008",
+    "enable_mlo_support": 1,
+    "mlo_chip_bitmask": 2,
+    "hw_mode_id_soc1": 5,
+    "split_hardware": {
+      "gpio_453": 1,
+      "gpio_454": 0,
+      "caldata_offset": 208896,
+      "caldata_offset_hex": "0x33000",
+      "caldata_length": 184320
+    },
+    "single_hardware": {
+      "gpio_453": 0,
+      "gpio_454": 1,
+      "caldata_offset": 413696,
+      "caldata_offset_hex": "0x65000",
+      "caldata_length": 184320
+    },
+    "low_5g": {"radio": "wifi1", "channel": 36, "width_mhz": 160},
+    "high_5g": {"radio": "wifi2", "channel": 149, "width_mhz": 80},
+    "mld_name": "hostap_mld",
+    "mld_links": ["5g", "5gh"]
+  },
+  "hardware_gate": {
+    "uart_1v8_required": true,
+    "gpio_sequence_verified_from_vendor_control_flow": true,
+    "gpio_electrically_tested_on_qwrt": false,
+    "live_apply_allowed": false
+  }
+}

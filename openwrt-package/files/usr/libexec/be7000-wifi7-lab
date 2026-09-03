@@ -1,0 +1,83 @@
+#!/bin/sh
+
+set -eu
+
+ROOT="${BE7000_ROOT:-}"
+PROFILE="${BE7000_PROFILE:-${ROOT}/etc/be7000-wifi7/profile.conf}"
+
+fail() {
+	printf 'FAIL: %s\n' "$*" >&2
+	exit 1
+}
+
+root_path() {
+	printf '%s%s' "$ROOT" "$1"
+}
+
+[ -r "$PROFILE" ] || fail "profile not found: $PROFILE"
+. "$PROFILE"
+
+preflight() {
+	model_file="$(root_path /tmp/sysinfo/board_name)"
+	qca_board_file="$(root_path /tmp/sysinfo/qca_board_name)"
+	hostapd_script="$(root_path /lib/wifi/hostapd.sh)"
+	qca_script="$(root_path /lib/wifi/qcawificfg80211.sh)"
+	bdf_file="$(root_path /lib/firmware/IPQ9574/WIFI_FW/qcn9224/bdwlan.b1008)"
+
+	[ "$(cat "$model_file")" = "$EXPECTED_MODEL" ] || fail "unexpected model"
+	[ "$(cat "$qca_board_file")" = "$EXPECTED_QCA_BOARD" ] || fail "unexpected QCA board"
+	[ -s "$bdf_file" ] || fail "bdwlan.b1008 is missing"
+	grep -q 'ieee80211be=1' "$hostapd_script" || fail "hostapd wrapper lacks 802.11be"
+	grep -q 'create_mlo_config' "$qca_script" || fail "QCA wrapper lacks MLO topology generator"
+
+	printf 'PREFLIGHT=PASS\n'
+	printf 'LIVE_APPLY_ALLOWED=%s\n' "$LIVE_APPLY_ALLOWED"
+	printf 'GPIO_SEQUENCE_VERIFIED_FROM_VENDOR_CONTROL_FLOW=%s\n' "$GPIO_SEQUENCE_VERIFIED_FROM_VENDOR_CONTROL_FLOW"
+	printf 'GPIO_ELECTRICALLY_TESTED_ON_QWRT=%s\n' "$GPIO_ELECTRICALLY_TESTED_ON_QWRT"
+}
+
+render() {
+	preflight
+	out="${1:-$(root_path /tmp/be7000-wifi7-render)}"
+	umask 077
+	mkdir -p "$out"
+	{
+		printf 'BDF_PCI2=%s\n' "$TARGET_BDF_PCI2"
+		printf 'ENABLE_MLO_SUPPORT=%s\n' "$TARGET_ENABLE_MLO_SUPPORT"
+		printf 'MLO_CHIP_BITMASK=%s\n' "$TARGET_MLO_CHIP_BITMASK"
+		printf 'HW_MODE_ID_SOC1=%s\n' "$TARGET_HW_MODE_ID_SOC1"
+		printf 'LINK0=%s\n' "$TARGET_LINK0"
+		printf 'LINK1=%s\n' "$TARGET_LINK1"
+		printf 'MLD=%s\n' "$TARGET_MLD"
+		printf 'SPLIT_GPIO453=%s\n' "$TARGET_SPLIT_GPIO453"
+		printf 'SPLIT_GPIO454=%s\n' "$TARGET_SPLIT_GPIO454"
+		printf 'SPLIT_CALDATA_OFFSET=%s\n' "$TARGET_SPLIT_CALDATA_OFFSET"
+		printf 'SPLIT_CALDATA_OFFSET_HEX=%s\n' "$TARGET_SPLIT_CALDATA_OFFSET_HEX"
+		printf 'SINGLE_GPIO453=%s\n' "$TARGET_SINGLE_GPIO453"
+		printf 'SINGLE_GPIO454=%s\n' "$TARGET_SINGLE_GPIO454"
+		printf 'SINGLE_CALDATA_OFFSET=%s\n' "$TARGET_SINGLE_CALDATA_OFFSET"
+		printf 'SINGLE_CALDATA_OFFSET_HEX=%s\n' "$TARGET_SINGLE_CALDATA_OFFSET_HEX"
+		printf 'CALDATA_LENGTH=%s\n' "$CALDATA_LENGTH"
+	} > "$out/target-state.env"
+	printf 'RENDERED=%s\n' "$out/target-state.env"
+}
+
+case "${1:-status}" in
+	status)
+		printf 'BE7000_WIFI7_LAB=installed\n'
+		printf 'LIVE_APPLY_ALLOWED=%s\n' "$LIVE_APPLY_ALLOWED"
+		;;
+	preflight)
+		preflight
+		;;
+	render)
+		shift
+		render "${1:-}"
+		;;
+	apply|enable|commit)
+		fail 'live activation is intentionally absent from this package'
+		;;
+	*)
+		fail 'usage: be7000-wifi7-lab {status|preflight|render [directory]}'
+		;;
+esac
