@@ -42,7 +42,8 @@ class RepositoryTests(unittest.TestCase):
     def test_russian_readme_is_primary_and_links_english(self) -> None:
         russian = (ROOT / "README.md").read_text(encoding="utf-8")
         english = (ROOT / "README.en.md").read_text(encoding="utf-8")
-        self.assertIn("## Зачем я это делаю", russian)
+        self.assertIn("## Зачем мне это нужно", russian)
+        self.assertIn("Я разработчик", russian)
         self.assertIn("[English](README.en.md)", russian)
         self.assertIn("[Русский](README.md)", english)
         self.assertIn("## Why I built this", english)
