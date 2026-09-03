@@ -21,4 +21,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -e .
       - run: python -m unittest discover -s tests -v
-      - run: sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab
+      - run: |
+          sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab
+          sh -n tools/iot-monitor/iot-monitor.sh

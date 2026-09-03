@@ -107,11 +107,23 @@ class RepositoryTests(unittest.TestCase):
         package_files = [str(path.relative_to(ROOT / "openwrt-package")) for path in (ROOT / "openwrt-package").rglob("*") if path.is_file()]
         self.assertFalse(any("init.d" in path or "postinst" in path for path in package_files))
 
+    def test_iot_monitor_is_generic_and_does_not_modify_network(self) -> None:
+        monitor = (ROOT / "tools/iot-monitor/iot-monitor.sh").read_text(encoding="utf-8")
+        example = (ROOT / "tools/iot-monitor/targets.example").read_text(encoding="utf-8")
+        self.assertIn("TARGETS_FILE", monitor)
+        self.assertIn("logread -f", monitor)
+        self.assertIn("wlanconfig", monitor)
+        self.assertIn("02:00:00:00:00:01", example)
+        self.assertNotRegex(monitor, r"\b(?:uci|wifi|ifconfig|iwconfig)\s+(?:set|commit|reload|down|up)\b")
+        self.assertNotIn("6c:94:66:3b:5a:5b", monitor + example)
+        self.assertNotIn("192.168.10.232", monitor + example)
+
     def test_ci_uses_read_only_permissions_and_runs_shell_check(self) -> None:
         workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn("sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab", workflow)
+        self.assertIn("sh -n tools/iot-monitor/iot-monitor.sh", workflow)
 
     def test_documented_cli_emits_valid_scenario_report(self) -> None:
         completed = subprocess.run(

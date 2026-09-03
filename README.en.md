@@ -82,6 +82,7 @@ python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 - [`profiles`](profiles) — non-secret public constants and safety gates.
 - [`tests`](tests) — block, rollback and mocked-success cases.
 - [`openwrt-package`](openwrt-package) — render-only OpenWrt package source.
+- [`tools/iot-monitor`](tools/iot-monitor) — rolling Wi-Fi, WAN and DNS monitor for IoT devices.
 - [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — evidence summary.
 - [`docs/SAFETY.md`](docs/SAFETY.md) — rules for a future hardware stage.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — Russian recovery runbook for administrators.

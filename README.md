@@ -100,6 +100,7 @@ python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 - [`profiles`](profiles) — публичные константы без секретов и caldata.
 - [`tests`](tests) — позитивные и негативные сценарии.
 - [`openwrt-package`](openwrt-package) — исходник безопасного OpenWrt-пакета.
+- [`tools/iot-monitor`](tools/iot-monitor) — кольцевой монитор Wi-Fi, WAN и DNS для IoT.
 - [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — заводская последовательность.
 - [`docs/SAFETY.md`](docs/SAFETY.md) — требования к аппаратному этапу.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — инструкция по восстановлению для администраторов.
