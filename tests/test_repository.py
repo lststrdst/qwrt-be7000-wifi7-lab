@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -99,6 +101,19 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn("sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab", workflow)
+
+    def test_documented_cli_emits_valid_scenario_report(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, "-m", "be7000_wifi7_lab", str(PROFILE_PATH)],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        report = json.loads(completed.stdout)
+        self.assertEqual(report["cases"]["no_uart"]["result"], "blocked")
+        self.assertEqual(report["cases"]["health_failure"]["result"], "rolled-back")
+        self.assertEqual(report["cases"]["fully_mocked_success"]["state"]["phy_count"], 3)
 
 
 if __name__ == "__main__":
