@@ -1,72 +1,79 @@
 # QWRT BE7000 Wi-Fi 7 / MLO Lab
 
-[![Tests](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
+**Русский** | [English](README.en.md)
 
-An independent, fail-closed research scaffold for bringing the Xiaomi BE7000
-(RC06) stock-like Wi-Fi 7 topology to QWRT R26.02.02 / QSDK 12.5.
+[![Тесты](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
-> This repository is **not an official QWRT source fork**, a ready-to-flash
-> firmware image, or a one-click Wi-Fi 7 enabler.
+Независимый стенд для аккуратного переноса заводской схемы Wi-Fi 7/MLO
+роутера Xiaomi BE7000 (RC06) на QWRT R26.02.02 / QSDK 12.5.
 
-## Why I built this
+> Это не официальный форк исходников QWRT, не готовая прошивка и не кнопка
+> «включить Wi-Fi 7». Публичного репозитория исходников конкретной сборки
+> R26.02.02 найти не удалось.
 
-I use the BE7000 as a real home gateway, not as a disposable test board. The
-stock Xiaomi firmware can expose three radios — 2.4 GHz, 5 GHz low and 5 GHz
-high — and combine the two 5 GHz links into one MLD. QWRT R26.02.02 contains
-substantial EHT/MLO machinery, but its default boot state exposes only two PHYs
-and loads the external QCN9224 in single-PHY mode.
+## Зачем я это делаю
 
-The tempting solution is to copy a few forum commands into an init script.
-That is also an easy way to lose every management path to the router. I built
-this project to turn that experiment into a reviewable transaction with exact
-inputs, explicit gates, negative tests and a defined rollback state.
+BE7000 у меня работает основным домашним шлюзом. На нём завязаны интернет,
+локальная сеть, IoT и удалённый доступ, поэтому проверять найденные на форуме
+команды прямо в автозагрузке — плохой способ разработки.
 
-## What is known
+Заводская прошивка умеет поднимать три радио: 2,4 ГГц, нижнюю и верхнюю части
+5 ГГц. Два 5-гигагерцовых линка она объединяет в один MLD. В QWRT нужные части
+EHT/MLO присутствуют, но штатно прошивка загружает QCN9224 в single-PHY режиме
+и показывает только два PHY.
 
-The vendor control flow recovered from a Xiaomi BE7000 RC06 firmware image uses
-the following state:
+Цель этого репозитория — оформить эксперимент как понятную транзакцию:
+проверить модель и входные данные, сохранить исходное состояние, применить
+изменение только временно, проверить сеть и при любой ошибке вернуть рабочий
+single-PHY режим.
 
-| State | GPIO 453 | GPIO 454 | ART offset | CNSS BDF | MLO |
+## Что удалось установить
+
+По управляющей логике из прошивки Xiaomi BE7000 RC06 получилась такая схема:
+
+| Режим | GPIO 453 | GPIO 454 | Смещение ART | CNSS BDF | MLO |
 |---|---:|---:|---:|---:|---:|
-| Split / three PHY | 1 | 0 | `0x33000` | `0x1008` | enabled, mask 2 |
-| Single / rollback | 0 | 1 | `0x65000` | `0x2` | disabled |
+| Split, три PHY | 1 | 0 | `0x33000` | `0x1008` | включён, mask 2 |
+| Single, откат | 0 | 1 | `0x65000` | `0x2` | выключен |
 
-Both calibration slices are 184,320 bytes. In split mode, the target topology
-is 5 GHz low at 160 MHz plus 5 GHz high at 80 MHz, joined as `5g + 5gh` under a
-single MLD. This is not a 320 MHz or 6 GHz implementation.
+Длина обоих фрагментов калибровки — 184 320 байт. Целевая радиосхема:
 
-The repository records the behavior, hashes locally supplied evidence during
-private testing, and models state transitions. It does not redistribute vendor
-firmware, extracted scripts, board-data files or device calibration material.
+- 5 ГГц low: канал 36, ширина 160 МГц;
+- 5 ГГц high: канал 149, ширина 80 МГц;
+- общий MLD: `5g + 5gh`;
+- третье радио: `wifi2`.
 
-## Current status
+Это Wi-Fi 7 за счёт EHT/MLO, но не единый канал 320 МГц и не диапазон 6 ГГц.
 
-- Exact vendor split and rollback constants documented.
-- Deterministic state-machine model with success, block and rollback cases.
-- CI tests require missing UART/electrical confirmation to fail closed.
-- Wrong calibration and failed health checks restore the single-PHY model.
-- No live `insmod`, GPIO writes, Wi-Fi reload, MTD writes or boot-variable
-  changes are implemented.
+## Что уже проверено
 
-The private hardware-specific lab completed 39 checks and a real QWRT
-`opkg --offline-root` test without changing the live router. That result is
-evidence for the packaging and control flow, not proof that RF/MLO works.
+- Константы split и rollback сверены с заводской управляющей логикой.
+- Модель воспроизводит блокировку, применение кандидата и полный откат.
+- Отсутствие UART и электрической проверки GPIO блокирует изменения.
+- Неверная калибровка и провал health-check возвращают исходное состояние.
+- Публичный OpenWrt-пакет умеет только `status`, `preflight` и `render`.
+- В коде нет live-вызовов `insmod`, GPIO write, `wifi reload`, MTD или U-Boot.
+- Закрытый стенд с файлами конкретного роутера прошёл 39 проверок и установку
+  через настоящий QWRT `opkg --offline-root`, не меняя рабочую систему.
 
-## Safety boundary
+Это подтверждает упаковку, проверки и порядок действий. Радиочасть QCN9224,
+реальный EHT beacon и соединение клиента виртуальная модель проверить не может.
 
-A virtual machine cannot emulate the BE7000's QCN9224 RF path, PCIe power
-sequencing, board GPIO electrical behavior, EHT beaconing or client
-association. A real hardware probe therefore requires:
+## Почему здесь нет готового образа
 
-1. A working 1.8 V UART console.
-2. Verified backups of ART, boot metadata and the active configuration.
-3. A RAM-first experiment with no autostart.
-4. An out-of-band watchdog that restores the known single-PHY state.
-5. A Wi-Fi 7 client capable of the required 5 GHz low + high MLO combination.
+Для первого аппаратного запуска нужны:
 
-Until those gates pass, this project intentionally stops before activation.
+1. Рабочая консоль UART 1,8 В.
+2. Проверенные копии ART, boot metadata и текущей конфигурации.
+3. RAM-first запуск без автозагрузки.
+4. Независимый watchdog, возвращающий single-PHY режим.
+5. Клиент Wi-Fi 7 с поддержкой нужной комбинации 5G-low + 5G-high MLO.
 
-## Run the model
+Пока эти условия не выполнены, репозиторий намеренно не содержит live
+активатора. Это ограничение проекта, а не обещание, что готовая прошивка уже
+безопасна для установки.
+
+## Запуск лабораторной модели
 
 ```bash
 python -m pip install -e .
@@ -74,28 +81,19 @@ python -m unittest discover -s tests -v
 python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 ```
 
-## Repository scope
+## Структура
 
-- [`src/be7000_wifi7_lab`](src/be7000_wifi7_lab) — pure state-transition model.
-- [`profiles`](profiles) — non-secret public constants and safety gates.
-- [`tests`](tests) — block, rollback and mocked-success cases.
-- [`openwrt-package`](openwrt-package) — render-only OpenWrt package source.
-- [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — evidence summary.
-- [`docs/SAFETY.md`](docs/SAFETY.md) — rules for a future hardware stage.
+- [`src/be7000_wifi7_lab`](src/be7000_wifi7_lab) — модель переходов состояния.
+- [`profiles`](profiles) — публичные константы без секретов и caldata.
+- [`tests`](tests) — позитивные и негативные сценарии.
+- [`openwrt-package`](openwrt-package) — исходник безопасного OpenWrt-пакета.
+- [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — заводская последовательность.
+- [`docs/SAFETY.md`](docs/SAFETY.md) — требования к аппаратному этапу.
+- [`README.en.md`](README.en.md) — английская версия описания.
 
-## Russian summary
+## Ссылки
 
-Я начал этот проект, потому что BE7000 используется как основной домашний
-шлюз, а не как стенд, который можно безболезненно превратить в кирпич. Цель —
-воспроизвести заводскую схему Wi-Fi 7/MLO на QWRT проверяемо и с гарантированным
-откатом. Публичного репозитория исходников конкретной QWRT R26.02.02 найти не
-удалось, поэтому это независимая лаборатория совместимости, а не выдаваемый за
-оригинал «форк». До появления UART 1.8 В проект сознательно не пишет GPIO и не
-меняет загрузку живого роутера.
-
-## References
-
-- [OpenWrt source and build system](https://openwrt.org/docs/guide-developer/source-code/start)
-- [OpenWrt Xiaomi BE7000 support pull request](https://github.com/openwrt/openwrt/pull/20604)
-- [Xiaomi Wi-Fi 7 FAQ](https://www.mi.com/global/support/article/KA-12725/)
-- [BE7000 QWRT R26.02.02 community thread](https://4pda.to/forum/index.php?showtopic=1070166&view=findpost&p=138861971)
+- [Исходники и система сборки OpenWrt](https://openwrt.org/docs/guide-developer/source-code/start)
+- [Pull request поддержки Xiaomi BE7000 в OpenWrt](https://github.com/openwrt/openwrt/pull/20604)
+- [Справка Xiaomi по Wi-Fi 7](https://www.mi.com/global/support/article/KA-12725/)
+- [Обсуждение QWRT R26.02.02 для BE7000](https://4pda.to/forum/index.php?showtopic=1070166&view=findpost&p=138861971)

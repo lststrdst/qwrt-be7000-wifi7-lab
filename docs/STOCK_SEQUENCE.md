@@ -1,14 +1,14 @@
-# Recovered stock split sequence
+# Заводская split-последовательность
 
-This document records facts derived from a locally examined Xiaomi BE7000 RC06
-firmware image. It does not include or redistribute the vendor files.
+Здесь записаны факты, полученные при локальном разборе прошивки Xiaomi BE7000
+RC06. Проприетарные файлы и калибровка устройства не публикуются.
 
-## Relevant control flow
+## Логика перехода
 
-The stock firmware has separate layers for persistent split state, wireless
-UCI topology, GPIO/calibration switching and CNSS driver arguments.
+Заводская прошивка раздельно управляет сохранённым split state, UCI-топологией
+радио, GPIO, выбором калибровки и аргументами CNSS.
 
-### Split mode
+### Split: три PHY
 
 ```text
 GPIO 453 = 1
@@ -23,7 +23,7 @@ wifi2 = enabled
 hostap MLD = 5g + 5gh
 ```
 
-### Single-PHY rollback
+### Single-PHY: рабочий откат
 
 ```text
 GPIO 453 = 0
@@ -35,10 +35,10 @@ enable_mlo_support = 0
 wifi2 = disabled
 ```
 
-The stock transition stops wireless/CNSS components before switching the
-hardware state and normally reboots after applying it. That makes this a boot-
-critical transition, not a safe `wifi reload` tweak.
+Перед переключением сток останавливает Wi-Fi и компоненты CNSS, меняет
+аппаратное состояние и обычно перезагружает роутер. Это boot-critical переход,
+а не безопасная настройка через `wifi reload`.
 
-These constants are exact software evidence. They do not prove that an altered
-QWRT boot path supplies the same GPIO/PCIe timing or that the QCN9224 will
-produce a valid EHT beacon.
+Константы подтверждают программный алгоритм Xiaomi. Они не доказывают, что
+изменённая загрузка QWRT даст те же GPIO/PCIe timings или что QCN9224 создаст
+рабочий EHT beacon.

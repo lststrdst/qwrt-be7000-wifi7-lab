@@ -1,23 +1,23 @@
-# Safety model
+# Модель безопасности
 
-## Invariants
+## Неизменяемые правила
 
-- Never write ART, MIBIB, bootloader partitions or device calibration data.
-- Never test boot-critical changes without a verified 1.8 V UART console.
-- Never overwrite the only management radio during the first EHT test.
-- Never commit a candidate state before LAN, WAN, AP and watchdog checks pass.
-- Never publish configuration backups, VPN material, Wi-Fi credentials,
-  device calibration files or vendor firmware blobs.
+- Не записывать ART, MIBIB, разделы загрузчика и калибровку устройства.
+- Не проверять boot-critical изменения без рабочей консоли UART 1,8 В.
+- Не трогать единственное управляющее радио при первом EHT-тесте.
+- Не сохранять кандидат до успешной проверки LAN, WAN, AP и watchdog.
+- Не публиковать backup конфигурации, VPN-материалы, пароли Wi-Fi, caldata и
+  проприетарные firmware blobs.
 
-## Required hardware-stage transaction
+## Транзакция аппаратного этапа
 
-1. Verify board identity, firmware fingerprints and device-owned calibration.
-2. Snapshot every file and runtime value that the experiment may touch.
-3. Arm an out-of-band rollback before stopping any radio service.
-4. Stage the split state in RAM first; do not add autostart.
-5. Require the third PHY, EHT beacon and management path to become healthy.
-6. Create a temporary MLD and associate a compatible Wi-Fi 7 client.
-7. Force a health failure and prove automatic single-PHY restoration.
-8. Only then consider a cold-boot test and persistent integration.
+1. Проверить модель платы, fingerprints прошивки и калибровку устройства.
+2. Сохранить все файлы и runtime-значения, которых коснётся эксперимент.
+3. Запустить независимый rollback до остановки Wi-Fi или CNSS.
+4. Применить split-состояние сначала только в RAM, без автозагрузки.
+5. Дождаться третьего PHY, EHT beacon и доступного канала управления.
+6. Создать временный MLD и подключить совместимый Wi-Fi 7 клиент.
+7. Искусственно провалить health-check и доказать автоматический откат.
+8. Только после этого переходить к cold boot и постоянной интеграции.
 
-The current repository implements only the pure model for this transaction.
+Сейчас репозиторий реализует только чистую модель этой транзакции.
