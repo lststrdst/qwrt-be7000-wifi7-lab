@@ -5,7 +5,8 @@
 [![Тесты](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
 Проект посвящён поддержке Wi-Fi 7/MLO для Xiaomi BE7000 (RC06) на QWRT
-R26.02.02 / QSDK 12.5 и безопасному возврату роутера в рабочее состояние.
+R26.02.02 / QSDK 12.5, наблюдению за IoT-устройствами и безопасному возврату роутера
+в рабочее состояние. Здесь же я храню воспроизводимые сетевые примеры без секретов.
 
 > Это не официальный форк исходников QWRT, не готовая прошивка и не кнопка
 > «включить Wi-Fi 7». Публичного репозитория исходников конкретной сборки
@@ -101,10 +102,26 @@ python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 - [`tests`](tests) — позитивные и негативные сценарии.
 - [`openwrt-package`](openwrt-package) — исходник безопасного OpenWrt-пакета.
 - [`tools/iot-monitor`](tools/iot-monitor) — кольцевой монитор Wi-Fi, WAN и DNS для IoT.
+- [`examples`](examples) — обезличенные каркасы L2TP/IPsec, VLESS/Reality и AmneziaWG.
+- [`tools/check_public.py`](tools/check_public.py) — проверка дерева перед публикацией.
 - [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — заводская последовательность.
 - [`docs/SAFETY.md`](docs/SAFETY.md) — требования к аппаратному этапу.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — инструкция по восстановлению для администраторов.
+- [`SECURITY.md`](SECURITY.md) — что нельзя публиковать из живой конфигурации.
 - [`README.en.md`](README.en.md) — английская версия описания.
+
+## Проверка перед публикацией
+
+Я держу живые конфигурации отдельно от репозитория. Перед каждым публичным
+коммитом запускаю модель и дополнительный сканер:
+
+```bash
+python -m unittest discover -s tests -v
+python tools/check_public.py
+```
+
+Примеры содержат только адреса из документальных диапазонов и значения
+`REPLACE_*`. Они не являются готовой конфигурацией для конкретной сети.
 
 ## Ссылки
 

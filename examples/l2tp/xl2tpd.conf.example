@@ -1,0 +1,10 @@
+[global]
+port = 1701
+
+[lac office]
+lns = vpn.example.net
+pppoptfile = /etc/ppp/options.office
+redial = yes
+redial timeout = 5
+max redials = 10
+length bit = yes

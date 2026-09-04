@@ -10,3 +10,5 @@
 Makefile text eol=lf
 openwrt-package/files/usr/libexec/* text eol=lf
 tools/iot-monitor/targets.example text eol=lf
+examples/**/*.example text eol=lf
+examples/**/*.sh text eol=lf

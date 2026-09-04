@@ -1,0 +1,5 @@
+# Send selected DNS through a local resolver transported by Xray.
+server=/blocked-service.example/127.0.0.1#1054
+
+# Populate the same destination set used by policy routing.
+ipset=/blocked-service.example/vless_dst

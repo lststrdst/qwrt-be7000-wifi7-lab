@@ -1,0 +1,18 @@
+[Interface]
+PrivateKey = REPLACE_WITH_SERVER_PRIVATE_KEY
+ListenPort = 51821
+Address = 10.77.0.1/24
+Jc = 4
+Jmin = 40
+Jmax = 70
+S1 = 20
+S2 = 40
+H1 = 1111111111
+H2 = 2222222222
+H3 = 3333333333
+H4 = 4444444444
+
+[Peer]
+PublicKey = REPLACE_WITH_CLIENT_PUBLIC_KEY
+PresharedKey = REPLACE_WITH_PRESHARED_KEY
+AllowedIPs = 10.77.0.2/32

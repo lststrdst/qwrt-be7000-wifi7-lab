@@ -17,4 +17,10 @@ caldata*.bin
 *.rar
 *.tar.gz
 *.key
+*.pem
+*.p12
+*.pfx
+*.mobileconfig
+*.qr
+*.png
 *.conf.local

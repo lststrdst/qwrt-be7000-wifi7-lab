@@ -1,0 +1,62 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "local-socks",
+      "listen": "127.0.0.1",
+      "port": 2080,
+      "protocol": "socks",
+      "settings": { "udp": true }
+    },
+    {
+      "tag": "transparent-tcp",
+      "port": 12346,
+      "protocol": "dokodemo-door",
+      "settings": { "network": "tcp", "followRedirect": true }
+    },
+    {
+      "tag": "transparent-udp",
+      "port": 12345,
+      "protocol": "dokodemo-door",
+      "settings": { "network": "udp", "followRedirect": true },
+      "streamSettings": { "sockopt": { "tproxy": "tproxy" } }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [{
+          "address": "203.0.113.10",
+          "port": 443,
+          "users": [{
+            "id": "REPLACE_WITH_UUID",
+            "encryption": "none",
+            "flow": "xtls-rprx-vision"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "www.example.com",
+          "fingerprint": "chrome",
+          "publicKey": "REPLACE_WITH_REALITY_PUBLIC_KEY",
+          "shortId": "REPLACE_WITH_SHORT_ID"
+        }
+      }
+    },
+    { "tag": "direct", "protocol": "freedom" },
+    { "tag": "block", "protocol": "blackhole" }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [{
+      "type": "field",
+      "inboundTag": ["local-socks", "transparent-tcp", "transparent-udp"],
+      "outboundTag": "proxy"
+    }]
+  }
+}

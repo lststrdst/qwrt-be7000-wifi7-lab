@@ -1,0 +1,20 @@
+[Interface]
+PrivateKey = REPLACE_WITH_CLIENT_PRIVATE_KEY
+Address = 10.77.0.2/32
+DNS = 10.77.0.1
+Jc = 4
+Jmin = 40
+Jmax = 70
+S1 = 20
+S2 = 40
+H1 = 1111111111
+H2 = 2222222222
+H3 = 3333333333
+H4 = 4444444444
+
+[Peer]
+PublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY
+PresharedKey = REPLACE_WITH_PRESHARED_KEY
+Endpoint = vpn-gateway.example.net:51821
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25

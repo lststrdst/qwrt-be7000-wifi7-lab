@@ -1,0 +1,16 @@
+config setup
+    uniqueids=no
+
+conn office-l2tp
+    keyexchange=ikev1
+    type=transport
+    authby=secret
+    left=%defaultroute
+    leftprotoport=17/1701
+    right=vpn.example.net
+    rightprotoport=17/1701
+    ike=aes256-sha256-modp2048,aes256-sha1-modp1024!
+    esp=aes256-sha256,aes256-sha1!
+    dpdaction=restart
+    dpddelay=30s
+    auto=add

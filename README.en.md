@@ -5,7 +5,8 @@
 [![Tests](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
 An independent, fail-closed research scaffold for bringing the Xiaomi BE7000
-(RC06) stock-like Wi-Fi 7 topology to QWRT R26.02.02 / QSDK 12.5.
+(RC06) stock-like Wi-Fi 7 topology to QWRT R26.02.02 / QSDK 12.5. I also keep
+the IoT diagnostics, recovery runbook and sanitized network templates here.
 
 > This repository is **not an official QWRT source fork**, a ready-to-flash
 > firmware image, or a one-click Wi-Fi 7 enabler.
@@ -83,9 +84,25 @@ python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
 - [`tests`](tests) — block, rollback and mocked-success cases.
 - [`openwrt-package`](openwrt-package) — render-only OpenWrt package source.
 - [`tools/iot-monitor`](tools/iot-monitor) — rolling Wi-Fi, WAN and DNS monitor for IoT devices.
+- [`examples`](examples) — sanitized L2TP/IPsec, VLESS/Reality and AmneziaWG templates.
+- [`tools/check_public.py`](tools/check_public.py) — pre-publication secret and artifact check.
 - [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — evidence summary.
 - [`docs/SAFETY.md`](docs/SAFETY.md) — rules for a future hardware stage.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — Russian recovery runbook for administrators.
+- [`SECURITY.md`](SECURITY.md) — material that must stay outside the repository.
+
+## Before publishing
+
+I keep live configurations outside the repository and run both checks before
+publishing a change:
+
+```bash
+python -m unittest discover -s tests -v
+python tools/check_public.py
+```
+
+The examples use documentation-only addresses and `REPLACE_*` placeholders.
+They are intentionally unusable until adapted to a specific network.
 
 ## References
 

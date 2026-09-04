@@ -89,9 +89,9 @@ class RepositoryTests(unittest.TestCase):
 
     def test_repository_has_no_local_identity_or_secret_material(self) -> None:
         private_pattern = re.compile(
-            r"BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY|PrivateKey\s*=|"
-            r"PresharedKey\s*=|sae_password|C:\\Users\\|"
-            r"192\.168\.10\.219|24:4B:FE:CB:16:9E",
+            r"BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY|"
+            r"(?:PrivateKey|PresharedKey)\s*=\s*(?!REPLACE_)[A-Za-z0-9+/]{40,}={0,2}|"
+            r"sae_password|C:\\Users\\|(?:vless|happ)://",
             re.IGNORECASE,
         )
         offenders = []
@@ -107,6 +107,25 @@ class RepositoryTests(unittest.TestCase):
         package_files = [str(path.relative_to(ROOT / "openwrt-package")) for path in (ROOT / "openwrt-package").rglob("*") if path.is_file()]
         self.assertFalse(any("init.d" in path or "postinst" in path for path in package_files))
 
+    def test_vpn_examples_are_placeholders_and_public_check_passes(self) -> None:
+        examples = (ROOT / "examples").rglob("*")
+        combined = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in examples
+            if path.is_file()
+        )
+        self.assertIn("REPLACE_WITH_IPSEC_PSK", combined)
+        self.assertIn("REPLACE_WITH_UUID", combined)
+        self.assertIn("REPLACE_WITH_SERVER_PRIVATE_KEY", combined)
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "tools/check_public.py")],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
     def test_iot_monitor_is_generic_and_does_not_modify_network(self) -> None:
         monitor = (ROOT / "tools/iot-monitor/iot-monitor.sh").read_text(encoding="utf-8")
         example = (ROOT / "tools/iot-monitor/targets.example").read_text(encoding="utf-8")
@@ -115,8 +134,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("wlanconfig", monitor)
         self.assertIn("02:00:00:00:00:01", example)
         self.assertNotRegex(monitor, r"\b(?:uci|wifi|ifconfig|iwconfig)\s+(?:set|commit|reload|down|up)\b")
-        self.assertNotIn("6c:94:66:3b:5a:5b", monitor + example)
-        self.assertNotIn("192.168.10.232", monitor + example)
+        macs = re.findall(r"(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", monitor + example)
+        self.assertTrue(all(mac.lower().startswith("02:00:00:00:00:") for mac in macs))
 
     def test_ci_uses_read_only_permissions_and_runs_shell_check(self) -> None:
         workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")

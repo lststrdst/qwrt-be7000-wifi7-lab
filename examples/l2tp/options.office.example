@@ -1,0 +1,16 @@
+name "office-user"
+ipparam office-l2tp
+noauth
+refuse-eap
+refuse-chap
+refuse-mschap
+refuse-mschap-v2
+require-pap
+mtu 1400
+mru 1400
+persist
+maxfail 0
+holdoff 5
+usepeerdns
+nodefaultroute
+lock
