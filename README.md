@@ -129,3 +129,7 @@ python tools/check_public.py
 - [Pull request поддержки Xiaomi BE7000 в OpenWrt](https://github.com/openwrt/openwrt/pull/20604)
 - [Справка Xiaomi по Wi-Fi 7](https://www.mi.com/global/support/article/KA-12725/)
 - [Обсуждение QWRT R26.02.02 для BE7000](https://4pda.to/forum/index.php?showtopic=1070166&view=findpost&p=138861971)
+
+---
+
+© lststrdst
