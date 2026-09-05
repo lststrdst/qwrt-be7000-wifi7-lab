@@ -40,8 +40,11 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn("params.set('token'", js)
         self.assertIn('AbortController', js)
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text()
-        for forbidden in ('iptables', 'uci commit', '/etc/init.d/', 'wg-quick up'):
+        for forbidden in ('uci commit', '/etc/init.d/', 'wg-quick up'):
             self.assertNotIn(forbidden, model)
+        self.assertNotIn("post('activate')", controller)
+        self.assertIn("post('preflight')", controller)
+        self.assertIn("post('delete')", controller)
         self.assertIn("socks5ListenLAN=false", model)
         self.assertIn("mode='prepare-only'", model)
 

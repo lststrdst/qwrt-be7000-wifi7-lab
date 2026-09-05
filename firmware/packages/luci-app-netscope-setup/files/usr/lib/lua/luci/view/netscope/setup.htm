@@ -26,7 +26,8 @@
 </fieldset></form>
 <div id="ns-setup-error" class="alert-message warning" role="alert" hidden></div>
 <fieldset id="ns-setup-result" class="cbi-section" hidden><legend>Private configuration</legend><p id="ns-setup-result-title" role="status">Prepared draft · not active</p><p id="ns-setup-note"></p><div id="ns-setup-plan" hidden><h3>Activation preview</h3><ul id="ns-setup-plan-list"></ul><h3>Checks completed</h3><ul id="ns-setup-check-list"></ul></div><div id="ns-setup-downloads"></div><p>Server and client downloads contain private credentials. Keep them out of GitHub, chat and screenshots.</p></fieldset>
+<fieldset class="cbi-section"><legend>Saved private drafts</legend><p class="cbi-map-descr">Stored only on router USB. Preflight is read-only and repeats runtime, port, route and file checks. Delete removes only the selected inactive draft.</p><div id="ns-setup-drafts" aria-live="polite">Loading saved drafts…</div></fieldset>
 <p><% if require('nixio.fs').access('/usr/lib/lua/luci/controller/netscope.lua') then %><a href="<%=url('admin','status','netscope')%>">NETSCOPE · certificates and traffic</a> · <% end %><a href="https://github.com/lststrdst/qwrt-be7000-wifi7-lab" target="_blank" rel="noopener noreferrer">Project &amp; installation guide</a></p>
 </section>
-<script defer src="/luci-static/netscope/setup.js?v=2"></script>
+<script defer src="/luci-static/netscope/setup.js?v=3"></script>
 <%+footer%>

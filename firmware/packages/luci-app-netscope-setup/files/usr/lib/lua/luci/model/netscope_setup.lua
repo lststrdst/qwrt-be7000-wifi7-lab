@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation. No network/service changes.
-local M={VERSION='0.2.0'}
+local M={VERSION='0.3.0'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
@@ -165,5 +165,64 @@ function M.download(id,file)
     need(C.valid_id(id),'Invalid draft')
     need(file=='server.conf' or file=='client.conf' or file=='xray.json' or file=='mieru.json' or file=='plan.json','Invalid file')
     local path=C.ROOT..'/config/setup/'..id..'/'..file;need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Draft unavailable');return path
+end
+local allowed_files={['server.conf']=true,['client.conf']=true,['xray.json']=true,['mieru.json']=true,['plan.json']=true}
+local function draft(id)
+    need(C.valid_id(id),'Invalid draft')
+    local dir=C.ROOT..'/config/setup/'..id;need(C.safe(dir) and (fs.lstat(dir) or {}).type=='dir','Draft unavailable')
+    local path=dir..'/plan.json';need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Draft plan unavailable')
+    local value=json.parse(need(C.read(path,20000),'Draft plan unavailable'));need(type(value)=='table' and value.id==id,'Invalid draft plan')
+    return value,dir
+end
+function M.list()
+    local storage=C.storage();if not storage.mounted or storage.error then return {} end
+    local root=C.ROOT..'/config/setup';if (fs.lstat(root) or {}).type~='dir' then return {} end
+    local out={};for id in fs.dir(root) do
+        if C.valid_id(id) and #out<20 then local ok,value=pcall(draft,id);if ok then
+            out[#out+1]={id=id,created=id:sub(1,8)..' '..id:sub(10,15)..' UTC',kind=value.kind,protocol=value.protocol,
+                state=value.state,validated=value.validated==true,listen_port=value.listen_port,server_address=value.server_address,
+                files=value.files or {},note=value.note}
+        end end
+    end
+    table.sort(out,function(a,b)return a.id>b.id end);return out
+end
+function M.preflight(id)
+    local value,dir=draft(id);local checks,blockers={},{}
+    local function result(ok,label)checks[#checks+1]=(ok and 'PASS · ' or 'BLOCK · ')..label;if not ok then blockers[#blockers+1]=label end end
+    local storage=C.storage(true);result(storage.mounted and storage.writable and not storage.error,'USB storage is mounted and writable')
+    for _,name in ipairs(value.files or {}) do
+        local st=allowed_files[name] and fs.lstat(dir..'/'..name);result(st and st.type=='reg','Private file '..tostring(name)..' is present and not a symlink')
+    end
+    local tools=M.tools();local live=inventory()
+    if value.kind=='wg' or value.kind=='awg' then
+        result((value.kind=='wg' and tools.wg or tools.awg)~=nil,'Matching tunnel tools are installed')
+        result(type(value.listen_port)=='number' and not live.used[value.listen_port],'UDP '..tostring(value.listen_port)..' is still free')
+        local net=cidr(need(value.server_address,'Draft has no tunnel address'));local overlap=false
+        for _,route in ipairs(live.routes) do if net.first<=route.last and route.first<=net.last then overlap=true;break end end
+        result(not overlap,'Tunnel subnet still does not overlap the main routing table')
+        result((C.read('/proc/sys/net/ipv4/ip_forward',8) or ''):match('1')~=nil,'IPv4 forwarding is enabled')
+        result(candidates({'/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables'})~=nil,'iptables is available')
+    elseif value.kind=='vless' then
+        result(tools.xray~=nil,'Xray runtime is installed')
+        if tools.xray then local ok=P.exec({tools.xray,'run','-test','-config',dir..'/xray.json'},6);result(ok,'Xray accepts the saved configuration') end
+        result(false,'Split-routing activation remains intentionally unavailable')
+    elseif value.kind=='mieru' then
+        result(value.state~='TEMPLATE','Mieru server credentials are configured')
+        result(tools.mieru~=nil,'Mieru runtime is installed')
+        result(false,'Mieru failover activation remains intentionally unavailable')
+    else result(false,'Draft protocol is supported') end
+    return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=false,stage='preflight-only',checks=checks,blockers=blockers,
+        rollback={'Remove NETSCOPE-owned redirect/input/forward rules first','Stop only the new profile process','Remove only its dedicated interface','Restore its own saved files; never restart network/firewall'},
+        note='Read-only preflight completed. No interface, process, route, DNS or firewall rule was changed.'}
+end
+function M.delete(id)
+    local value,dir=draft(id);need(not fs.lstat(C.RUN..'/active-'..id),'Stop the profile before deleting its private files')
+    local seen={};for name in fs.dir(dir) do
+        need(allowed_files[name] and not seen[name],'Draft contains an unexpected file; refusing automatic deletion')
+        local st=fs.lstat(dir..'/'..name);need(st and st.type=='reg','Draft contains a non-regular file; refusing automatic deletion');seen[name]=true
+    end
+    for name in pairs(seen) do need(fs.unlink(dir..'/'..name),'Could not delete private draft file') end
+    need(fs.rmdir(dir),'Could not remove private draft directory')
+    return {id=id,deleted=true,kind=value.kind,note='Private draft deleted. No running VPN or network setting was changed.'}
 end
 return M
