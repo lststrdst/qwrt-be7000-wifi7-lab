@@ -17,8 +17,9 @@
 
 1. Добавить интеграционные тесты API, iptables cleanup и USB failure.
 2. Упаковать документированный ARM64 Docker runtime для HTTPS lab без vendor blobs.
-3. Добавить policy-routing слой поверх loopback VLESS/Mieru/HY2 с отдельным rollback; первым профилем сделать узкий Discord voice A/B-тест без захвата игр.
-4. Проверить AWG, Mieru и Hysteria 2 на реальных внешних серверах; без бинарника их preflight заблокирован.
+3. Проверить узкий Telegram/Discord HY2 voice route в длительных звонках и
+   добавить графики upstream health/jitter без расширения адресного охвата.
+4. Проверить AWG и Mieru на реальных внешних серверах; без бинарника их preflight заблокирован.
 5. Закрепить воспроизводимую QWRT/OpenWrt базу, toolchain и package manifest.
 6. Проверить чистый first boot, обновление и возврат на известную рабочую
    сборку на отдельном стенде.

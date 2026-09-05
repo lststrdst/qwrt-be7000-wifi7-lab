@@ -34,9 +34,12 @@ LuCI-приложение **VPN Quick setup**:
 - не пишет секреты в browser storage;
 - не меняет UCI и default route;
 - для WG/AWG использует отдельные интерфейсы и именованные rules;
-- для VLESS/Mieru/Hysteria 2 использует отдельные loopback SOCKS-процессы;
+- для VLESS/Mieru использует отдельные loopback SOCKS-процессы, а для HY2 —
+  loopback SOCKS и изолированный TUN без автоматических маршрутов;
 - у каждого runtime есть preflight, подтверждение и watchdog rollback;
-- не меняет DNS, default route и policy routing.
+- отдельной кнопкой добавляет только Telegram/Discord UDP → HY2 TUN через
+  timeout-ipset, собственные mark/table/filter-chain и fail-open watchdog;
+- не меняет default route, L2TP и существующую VLESS policy routing.
 
 ### `packages/netscope-wifi7-lab`
 
@@ -65,7 +68,7 @@ overlay воспроизводим из опубликованных компо�
 - полного исходного дерева QWRT R26.02.02;
 - first-boot wizard и генерации уникальных device keys/CA;
 - переносимого Docker ARM64 runtime для HTTPS lab;
-- policy-routing слоя для подготовленных VLESS/Mieru/Hysteria 2 SOCKS;
+- общего policy-routing слоя для подготовленных VLESS/Mieru SOCKS;
 - проверенного sysupgrade/factory image.
 
 ## Как собрать текущий overlay

@@ -1,0 +1,80 @@
+#!/bin/sh
+# Download data only. Never changes routes, DNS or a running VPN.
+set -eu
+umask 077
+
+ROOT=/mnt/sda1/NETSCOPE
+DEST="$ROOT/config/voice"
+WORK="$ROOT/runtime/voice-update.$$"
+IPSET=${NETSCOPE_VOICE_IPSET:-/usr/sbin/ipset}
+CURL=${NETSCOPE_VOICE_CURL:-/usr/bin/curl}
+SHA256SUM=${NETSCOPE_VOICE_SHA256SUM:-/usr/bin/sha256sum}
+OFFICIAL=https://core.telegram.org/resources/cidr.txt
+PRIMARY=https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.list
+SECONDARY=https://raw.githubusercontent.com/Loyalsoldier/geoip/release/clash/ipcidr/telegram.txt
+
+die(){ echo "netscope-voice-update: $*" >&2; exit 1; }
+cleanup(){ rm -rf "$WORK"; }
+trap cleanup EXIT HUP INT TERM
+
+[ -x "$CURL" ] || die 'curl unavailable'
+[ -x "$IPSET" ] || die 'ipset unavailable'
+[ -x "$SHA256SUM" ] || die 'sha256sum unavailable'
+[ -d /mnt/sda1 ] && [ -w /mnt/sda1 ] || die 'writable USB unavailable'
+[ ! -L "$ROOT" ] && [ ! -L "$DEST" ] || die 'unsafe NETSCOPE storage path'
+mkdir -p "$ROOT/config" "$ROOT/runtime" "$DEST" "$WORK"
+chmod 700 "$ROOT" "$ROOT/config" "$ROOT/runtime" "$DEST" "$WORK"
+
+fetch(){
+    "$CURL" -fsSL --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 2 -o "$2" "$1"
+    [ -s "$2" ] || die 'empty rule source'
+}
+
+fetch_optional(){
+    "$CURL" -fsSL --connect-timeout 5 --max-time 15 -o "$2" "$1" 2>/dev/null
+}
+
+normalize(){
+    awk '
+    function valid_ip(ip,a,i) {
+      if (split(ip,a,"[.]") != 4) return 0
+      for (i=1;i<=4;i++) if (a[i] !~ /^[0-9]+$/ || a[i] < 0 || a[i] > 255) return 0
+      return 1
+    }
+    {
+      gsub(/\r/,""); sub(/#.*/,""); gsub(/[\047\042]/,"")
+      gsub(/^[[:space:]-]+|[[:space:]]+$/,"")
+      if ($0=="" || $0=="payload:") next
+      split($0,p,"/")
+      if (valid_ip(p[1]) && p[2] ~ /^[0-9]+$/ && p[2] >= 8 && p[2] <= 32) print p[1] "/" p[2]
+    }' "$1" | sort -u
+}
+
+fetch "$PRIMARY" "$WORK/primary.raw"
+fetch "$SECONDARY" "$WORK/secondary.raw"
+normalize "$WORK/primary.raw" >"$WORK/primary.txt"
+normalize "$WORK/secondary.raw" >"$WORK/secondary.txt"
+count=$(wc -l <"$WORK/primary.txt" | tr -d ' ')
+[ "$count" -ge 6 ] && [ "$count" -le 128 ] || die 'Telegram list failed size validation'
+cmp -s "$WORK/primary.txt" "$WORK/secondary.txt" || die 'independent Telegram sources disagree'
+source_count=2
+if fetch_optional "$OFFICIAL" "$WORK/official.raw"; then
+    normalize "$WORK/official.raw" >"$WORK/official.txt"
+    cmp -s "$WORK/primary.txt" "$WORK/official.txt" || die 'official Telegram list disagrees with independent sources'
+    source_count=3
+fi
+
+validate=ns_voice_validate_$$
+"$IPSET" create "$validate" hash:net family inet hashsize 128 maxelem 256
+awk -v set="$validate" '{print "add " set " " $0}' "$WORK/primary.txt" | "$IPSET" restore
+loaded=$("$IPSET" list "$validate" | awk '/Number of entries:/ {print $4}')
+"$IPSET" destroy "$validate"
+[ "$loaded" = "$count" ] || die 'kernel rejected Telegram network list'
+
+"$SHA256SUM" "$WORK/primary.txt" | awk '{print $1}' >"$WORK/telegram-ipv4.sha256"
+date -u +%Y-%m-%dT%H:%M:%SZ >"$WORK/updated-at"
+mv -f "$WORK/primary.txt" "$DEST/telegram-ipv4.txt"
+mv -f "$WORK/telegram-ipv4.sha256" "$DEST/telegram-ipv4.sha256"
+mv -f "$WORK/updated-at" "$DEST/updated-at"
+chmod 600 "$DEST/telegram-ipv4.txt" "$DEST/telegram-ipv4.sha256" "$DEST/updated-at"
+printf '{"updated":true,"telegram_nets":%s,"source_count":%s}\n' "$count" "$source_count"

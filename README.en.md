@@ -39,7 +39,7 @@ maintainable product instead of a collection of one-off shell commands:
 |---|---|---|
 | NETSCOPE UI | Russian LuCI shell, login, navigation and base version | published as `luci-theme-netscope`; runs on the test router |
 | NETSCOPE Traffic | devices, conntrack, directions, ports, counters and controlled USB PCAP sessions | published as `luci-app-netscope`; Capture stays OFF after installation |
-| VPN Quick setup | prepare and explicitly activate WG, AWG, VLESS/Xray, Mieru and HY2 from LuCI | each protocol has preflight, confirmation, health checks and isolated rollback; a missing runtime blocks activation |
+| VPN Quick setup | prepare and explicitly activate WG, AWG, VLESS/Xray, Mieru and HY2 from LuCI | each protocol has preflight, confirmation, health checks and isolated rollback; Telegram/Discord UDP can be routed through HY2 without capturing games or L2TP |
 | IoT monitor | distinguish Wi‑Fi, DHCP, DNS, WAN and cloud failures | read-only tool published |
 | Recovery | backups, known-good baseline and return procedure | runbook published; no recovery image is distributed |
 | Wi‑Fi 7 / MLO Lab | investigate the vendor 5G-low + 5G-high topology | models, render-only helper and tests only; no live apply |

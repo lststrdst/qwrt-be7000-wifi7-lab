@@ -54,6 +54,9 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/lib/lua/luci/view/netscope/setup.htm',
             'usr/libexec/netscope-vpn-profile',
             'usr/libexec/netscope-install-hysteria',
+            'usr/libexec/netscope-hy2-udp-probe',
+            'usr/libexec/netscope-voice-route',
+            'usr/libexec/netscope-voice-update',
             'www/luci-static/netscope/setup.js',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}
@@ -101,22 +104,53 @@ class FirmwareSourceTests(unittest.TestCase):
             self.assertIn('value="'+protocol+'"', view)
         self.assertIn('явного подтверждения', view)
 
-    def test_hysteria2_draft_is_loopback_only_and_tls_guarded(self):
+    def test_hysteria2_draft_has_loopback_socks_isolated_tun_and_tls_guard(self):
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')
         js = (FILES/'www/luci-static/netscope/setup.js').read_text(encoding='utf-8')
-        self.assertIn("uri:match('^hysteria2://')", model)
-        self.assertIn("uri:match('^hy2://')", model)
+        self.assertIn("source:match('^hysteria2://')", model)
+        self.assertIn("source:match('^hy2://')", model)
+        self.assertIn("out.protocol=='hysteria'", model)
+        self.assertIn("stream.network=='hysteria'", model)
+        self.assertIn("tls.alpn[1]=='h3'", model)
         self.assertIn("listen: 127.0.0.1:2083", model)
         self.assertIn("disableUDP: false", model)
-        self.assertIn("udpTProxy:\\n  listen: :12347\\n  timeout: 20s", model)
-        self.assertIn("tproxy_port=12347", model)
+        self.assertIn("tun:\\n  name: nshy2\\n  mtu: 1380", model)
+        self.assertIn("ipv4: 198.18.10.1/30", model)
         self.assertIn("Нельзя отключать проверку TLS без pinSHA256", model)
         self.assertIn("el('hy2-uri').value=''", js)
         self.assertNotIn('localStorage', js)
         manager = (FILES/'usr/libexec/netscope-vpn-profile').read_text(encoding='utf-8')
-        self.assertIn('NETSCOPE_VPN_HY2_TPROXY_PORT:-12347', manager)
-        self.assertIn('udp_listener_up "$TPROXY_PORT"', manager)
+        self.assertIn('NETSCOPE_VPN_HY2_TUN_IFACE:-nshy2', manager)
+        self.assertIn('link show dev "$TUN_IFACE"', manager)
         self.assertIn('HYSTERIA_DISABLE_UPDATE_CHECK=1', manager)
+        self.assertIn('HYSTERIA=/mnt/sda1/qwrt-services/hysteria/bin/hysteria', manager)
+
+    def test_voice_route_is_narrow_atomic_and_fail_open(self):
+        route = (FILES/'usr/libexec/netscope-voice-route').read_text(encoding='utf-8')
+        update = (FILES/'usr/libexec/netscope-voice-update').read_text(encoding='utf-8')
+        self.assertIn('NS_VOICE_HY2', route)
+        self.assertIn('ns_voice_discord', route)
+        self.assertIn('ns_voice_discord_nets', route)
+        self.assertIn("DISCORD_VOICE_NETS='66.22.192.0/18 104.29.128.0/19'", route)
+        self.assertIn('ns_voice_telegram_nets', route)
+        self.assertIn('discord.media', route)
+        self.assertIn('route add default dev "$TUN_IFACE" table "$TABLE"', route)
+        self.assertIn('-j MARK --set-xmark "$MARK"', route)
+        self.assertIn('-m mark --mark "$MARK" -j ACCEPT', route)
+        self.assertIn('"discord_nets":%s', route)
+        self.assertIn('NS_VOICE_HY2_FWD', route)
+        self.assertIn('-I PREROUTING 1 -i br-lan', route)
+        self.assertIn('/usr/libexec/netscope-hy2-udp-probe', route)
+        self.assertIn('sleep 10', route)
+        self.assertIn("HY2 or route unhealthy; voice interception removed (fail open)", route)
+        self.assertNotIn('TPROXY', route)
+        self.assertNotIn('network restart', route)
+        self.assertIn('core.telegram.org/resources/cidr.txt', update)
+        self.assertIn('MetaCubeX/meta-rules-dat', update)
+        self.assertIn('Loyalsoldier/geoip', update)
+        self.assertIn("cmp -s \"$WORK/primary.txt\" \"$WORK/secondary.txt\"", update)
+        self.assertIn("cmp -s \"$WORK/primary.txt\" \"$WORK/official.txt\"", update)
+        self.assertNotIn('eval ', update)
 
     def test_hysteria_runtime_installer_is_pinned_and_never_starts_vpn(self):
         installer = (FILES/'usr/libexec/netscope-install-hysteria').read_text(encoding='utf-8')

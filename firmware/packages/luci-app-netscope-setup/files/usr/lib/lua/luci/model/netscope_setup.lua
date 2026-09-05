@@ -30,7 +30,8 @@ function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
         hysteria=candidates({'/usr/bin/hysteria','/usr/sbin/hysteria','/mnt/sda1/qwrt-services/hysteria/bin/hysteria'}),
-        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
+        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'}),
+        voice_route=candidates({'/usr/libexec/netscope-voice-route'}),voice_update=candidates({'/usr/libexec/netscope-voice-update'})}
 end
 local function inventory()
     local used_udp,used_tcp,routes={},{},{}
@@ -69,7 +70,7 @@ function M.status()
         need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,manager=t.manager~=nil,voice_route=t.voice_route~=nil,voice_update=t.voice_update~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
         note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray, Mieru и Hysteria 2. Каждый профиль использует только собственный интерфейс или loopback-порт.'
             or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
@@ -155,19 +156,36 @@ local function mieru_plan(input,dir)
             or 'Подготовлен отдельный локальный SOCKS-профиль. Он начнёт принимать подключения только после preflight и явного включения; автоматическая маршрутизация трафика не добавляется.'}
 end
 local function hy2_plan(input,dir)
-    local uri=input.hy2_uri or ''
-    need(type(uri)=='string' and #uri>=16 and #uri<=4096 and not uri:find('%s') and not uri:find('%c'),'Вставьте одну ссылку Hysteria 2 без пробелов (не более 4 КБ)')
-    need(uri:match('^hysteria2://') or uri:match('^hy2://'),'Ожидается одна ссылка hysteria2:// или hy2://, а не подписка')
-    local lower=uri:lower();local insecure=lower:find('[?&]insecure=1') or lower:find('[?&]insecure=true')
-    local pinned=lower:find('[?&]pinsha256=[^&#]+')
-    need(not insecure or pinned,'Нельзя отключать проверку TLS без pinSHA256')
-    -- JSON string syntax is a valid quoted YAML scalar and avoids YAML injection.
-    local config='server: '..json.stringify(uri)..'\nlazy: true\nsocks5:\n  listen: 127.0.0.1:2083\n  disableUDP: false\nudpTProxy:\n  listen: :12347\n  timeout: 20s\n'
+    local source=input.hy2_uri or ''
+    need(type(source)=='string' and #source>=16 and #source<=12000,'Вставьте один HY2-узел или один Hysteria outbound JSON (не более 12 КБ)')
+    local config,source_check
+    if source:match('^hysteria2://') or source:match('^hy2://') then
+        need(not source:find('%s') and not source:find('%c'),'Ссылка Hysteria 2 не должна содержать пробелы')
+        local lower=source:lower();local insecure=lower:find('[?&]insecure=1') or lower:find('[?&]insecure=true')
+        local pinned=lower:find('[?&]pinsha256=[^&#]+')
+        need(not insecure or pinned,'Нельзя отключать проверку TLS без pinSHA256')
+        -- JSON string syntax is a valid quoted YAML scalar and avoids YAML injection.
+        config='server: '..json.stringify(source)..'\n'
+        source_check='Принята ровно одна ссылка hysteria2:// или hy2://'
+    else
+        local out=json.parse(source);need(type(out)=='table' and out.protocol=='hysteria','Ожидается один Hysteria outbound JSON или ссылка HY2, а не подписка')
+        local settings=out.settings;local stream=out.streamSettings;local hs=stream and stream.hysteriaSettings;local tls=stream and stream.tlsSettings
+        need(type(settings)=='table' and tonumber(settings.version)==2 and tonumber(hs and hs.version)==2,'Поддерживается только Hysteria 2')
+        need(not out.proxySettings and not stream.sockopt,'Удалите пользовательские proxySettings/sockopt из первоначального профиля')
+        local address=host(settings.address);local server_port=port(settings.port)
+        need(stream.network=='hysteria' and stream.security=='tls','Hysteria outbound должен использовать native Hysteria transport и TLS')
+        need(type(hs.auth)=='string' and #hs.auth>=8 and #hs.auth<=512 and not hs.auth:find('%c'),'Некорректная аутентификация Hysteria 2')
+        need(type(tls)=='table' and tls.allowInsecure~=true,'Проверка TLS должна оставаться включённой')
+        local sni=host(tls.serverName);need(type(tls.alpn)=='table' and #tls.alpn==1 and tls.alpn[1]=='h3','Для native Hysteria 2 требуется ALPN h3')
+        config='server: '..json.stringify(address..':'..server_port)..'\nauth: '..json.stringify(hs.auth)..'\ntls:\n  sni: '..json.stringify(sni)..'\n  insecure: false\n'
+        source_check='Принят ровно один Hysteria 2 outbound JSON; полная подписка не сохранялась'
+    end
+    config=config..'lazy: true\nsocks5:\n  listen: 127.0.0.1:2083\n  disableUDP: false\ntun:\n  name: nshy2\n  mtu: 1380\n  timeout: 2m\n  address:\n    ipv4: 198.18.10.1/30\n'
     write(dir..'/hysteria.yaml',config)
-    return {kind='hy2',protocol='Hysteria 2',state='DRAFT',validated=false,files={'hysteria.yaml'},local_port=2083,tproxy_port=12347,
-        checks={'Принимается ровно одна ссылка hysteria2:// или hy2://','SOCKS5 с UDP слушает только 127.0.0.1:2083','Native UDP TProxy подготовлен на отдельном порту 12347','Отключение проверки TLS разрешено только вместе с pinSHA256'},
-        planned_changes={'Запустить отдельный процесс Hysteria 2 из приватного черновика','Проверить SOCKS 127.0.0.1:2083 и UDP TProxy :12347','Не менять default route, DNS, UCI, voice-маршруты и другие VPN'},
-        note='Подготовлен отдельный HY2 SOCKS5/UDP + native UDP TProxy-профиль. Сам listener ничего не перехватывает: узкая policy routing для звонков включается отдельно после A/B-теста.'}
+    return {kind='hy2',protocol='Hysteria 2',state='DRAFT',validated=false,files={'hysteria.yaml'},local_port=2083,tun_interface='nshy2',
+        checks={source_check,'SOCKS5 с UDP слушает только 127.0.0.1:2083','Изолированный HY2 TUN nshy2 не получает маршруты автоматически','Проверка TLS не отключена'},
+        planned_changes={'Запустить отдельный процесс Hysteria 2 из приватного черновика','Создать nshy2 без изменения main/default route','Не менять DNS, UCI, voice-маршруты и другие VPN'},
+        note='Подготовлен отдельный HY2 SOCKS5/UDP + TUN-профиль. Сам интерфейс ничего не перехватывает: узкая policy routing для звонков включается отдельно после A/B-теста.'}
 end
 function M.prepare(input)
     need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru' or input.kind=='hy2'),'Выберите WireGuard, AmneziaWG, VLESS, Mieru или Hysteria 2')
@@ -206,9 +224,34 @@ local function runtime_status(manager,kind)
     local value=json.parse(out);if type(value)~='table' or value.kind~=(kind or 'wg') or (value.id~='' and not C.valid_id(value.id)) then
         return {active=false,pending=false,healthy=false,id='',kind=kind,error='Некорректное состояние среды выполнения'}
     end
-    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port,tproxy_port=value.tproxy_port}
+    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port,tun_interface=value.tun_interface}
 end
 M.runtime_status=function(kind)return runtime_status(M.tools().manager,kind or 'wg')end
+function M.voice_status()
+    local route=M.tools().voice_route;if not route then return {active=false,healthy=false,hy2=false,available=false,telegram_nets=0,telegram_dns_ips=0,discord_ips=0,discord_nets=0,dns_integration=false} end
+    local ok,out=P.exec({route,'status'},4);if not ok then return {active=false,healthy=false,hy2=false,available=true,error='Состояние voice routing недоступно'} end
+    local value=json.parse(out);if type(value)~='table' then return {active=false,healthy=false,hy2=false,available=true,error='Некорректное состояние voice routing'} end
+    value.available=true;return value
+end
+function M.voice_update()
+    local updater=need(M.tools().voice_update,'Обновлятор наборов Telegram не установлен')
+    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error,'USB-накопитель недоступен')
+    local ok,out=P.exec({updater},120);need(ok,'Наборы для звонков не обновлены: '..tostring(out):sub(1,240))
+    local value=json.parse(out);need(type(value)=='table' and value.updated==true and tonumber(value.telegram_nets)>=6,'Обновлятор вернул некорректный результат')
+    value.note='Два независимых источника совпали; IPv4-сети Telegram сохранены приватно и ещё не направлены в HY2.';return value
+end
+function M.voice_activate()
+    local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
+    local ok,out=P.exec({route,'start'},35);need(ok,'Маршрутизация звонков не включена: '..tostring(out):sub(1,240))
+    local value=json.parse(out);need(type(value)=='table' and value.active and value.healthy and value.hy2,'Маршрутизация звонков не достигла исправного состояния')
+    value.note='Telegram relay и динамические Discord voice IP направляются через HY2 TUN. Другой UDP, Steam/Dota, L2TP и системный default route не изменены.';return value
+end
+function M.voice_deactivate()
+    local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
+    local ok,out=P.exec({route,'stop'},12);need(ok,'Не удалось снять voice routing: '..tostring(out):sub(1,240))
+    local value=json.parse(out);need(type(value)=='table' and not value.active,'Маршрутизация звонков вернула некорректное состояние после остановки')
+    value.note='HY2-маршрут звонков снят; пакеты снова обрабатываются обычными правилами роутера.';return value
+end
 function M.install_hysteria()
     local tools=M.tools();need(not tools.hysteria,'Hysteria 2 уже установлена')
     local installer=need(tools.hysteria_installer,'Проверенный установщик Hysteria 2 отсутствует')
@@ -226,7 +269,7 @@ function M.list()
             local live=active[value.kind] or {}
             out[#out+1]={id=id,created=id:sub(1,8)..' '..id:sub(10,15)..' UTC',kind=value.kind,protocol=value.protocol,
                 state=value.state,validated=value.validated==true,listen_port=value.listen_port,server_address=value.server_address,
-                local_port=value.local_port,tproxy_port=value.tproxy_port,files=value.files or {},note=value.note,active=live.active and live.id==id,pending=live.pending and live.id==id,healthy=live.healthy and live.id==id}
+                local_port=value.local_port,tun_interface=value.tun_interface,files=value.files or {},note=value.note,active=live.active and live.id==id,pending=live.pending and live.id==id,healthy=live.healthy and live.id==id}
         end end
     end
     table.sort(out,function(a,b)return a.id>b.id end);return out
@@ -261,7 +304,7 @@ function M.preflight(id)
     elseif value.kind=='hy2' then
         result(tools.hysteria~=nil,'Среда Hysteria 2 установлена')
         result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
-        result(type(value.tproxy_port)=='number' and not live.used_udp[value.tproxy_port],'Локальный UDP TProxy-порт '..tostring(value.tproxy_port)..' свободен')
+        result(value.tun_interface=='nshy2' and not fs.access('/sys/class/net/nshy2'),'Изолированный интерфейс nshy2 свободен')
         activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
     else result(false,'Протокол черновика поддерживается') end
     return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=activation_supported,stage='activation-ready',checks=checks,blockers=blockers,
@@ -292,7 +335,7 @@ function M.activate(id)
     end
     local confirmed,final=P.exec({manager,'confirm',value.kind,id},8);if not confirmed then P.exec({manager,'rollback',value.kind,id},8);error('Не удалось подтвердить профиль; выполнен откат') end
     local state=json.parse(final);need(type(state)=='table' and state.kind==value.kind and state.active and state.healthy and state.id==id,'Подтверждение профиля вернуло некорректное состояние')
-    return {id=id,active=true,healthy=true,kind=value.kind,interface=state.interface,listen=state.listen,local_port=state.local_port,tproxy_port=state.tproxy_port,
+    return {id=id,active=true,healthy=true,kind=value.kind,interface=state.interface,listen=state.listen,local_port=state.local_port,tun_interface=state.tun_interface,
         note='Отдельный профиль '..tostring(value.protocol or value.kind)..' активен. Существующие VPN, L2TP, UCI, DNS и маршрут по умолчанию не изменялись.'}
 end
 function M.deactivate(id)

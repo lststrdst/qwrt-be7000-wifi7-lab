@@ -1,0 +1,42 @@
+#!/usr/bin/lua
+-- End-to-end SOCKS5 UDP probe for an already running local Hysteria 2 client.
+-- The STUN response is validated in memory and never printed or stored.
+local n=require'nixio'
+local function fail() io.stderr:write('netscope-hy2-udp-probe: no valid UDP reply\n');os.exit(1) end
+local function exact(sock,want)
+    local out=''
+    while #out<want do local chunk=sock:recv(want-#out);if not chunk or #chunk==0 then fail() end;out=out..chunk end
+    return out
+end
+local function sendall(sock,data)
+    local sent=0
+    while sent<#data do local count=sock:send(data,sent,#data-sent);if not count or count<=0 then fail() end;sent=sent+count end
+end
+local tcp=n.socket('inet','stream');if not tcp then fail() end
+tcp:setopt('socket','sndtimeo',5);tcp:setopt('socket','rcvtimeo',5)
+if not tcp:connect('127.0.0.1',2083) then fail() end
+sendall(tcp,string.char(5,1,0));local hello=exact(tcp,2)
+if hello~=string.char(5,0) then fail() end
+sendall(tcp,string.char(5,3,0,1,0,0,0,0,0,0));local head=exact(tcp,4)
+if head:byte(1)~=5 or head:byte(2)~=0 then fail() end
+local atyp=head:byte(4);local relay='127.0.0.1'
+if atyp==1 then
+    local addr=exact(tcp,4);relay=table.concat({addr:byte(1,4)},'.')
+elseif atyp==3 then
+    local size=exact(tcp,1):byte();relay=exact(tcp,size)
+elseif atyp==4 then
+    exact(tcp,16)
+else fail() end
+local p=exact(tcp,2);local relay_port=p:byte(1)*256+p:byte(2)
+if relay=='0.0.0.0' or relay=='' or atyp==4 then relay='127.0.0.1' end
+if relay_port<1 then fail() end
+local udp=n.socket('inet','dgram');if not udp then fail() end
+udp:setopt('socket','sndtimeo',5);udp:setopt('socket','rcvtimeo',8)
+if not udp:connect(relay,relay_port) then fail() end
+local host='stun.cloudflare.com';local cookie=string.char(0x21,0x12,0xa4,0x42)
+local stun=string.char(0,1,0,0)..cookie..string.rep(string.char(0x5a),12)
+local frame=string.char(0,0,0,3,#host)..host..string.char(0x0d,0x96)..stun
+if not udp:send(frame) then fail() end
+local response=udp:recv(2048);udp:close();tcp:close()
+if not response or #response<30 or not response:find(string.char(1,1,0),1,true) or not response:find(cookie,1,true) then fail() end
+print('{"udp":true,"target":"public-stun"}')

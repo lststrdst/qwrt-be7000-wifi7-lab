@@ -13,6 +13,7 @@ XRAY=${NETSCOPE_VPN_XRAY:-/usr/bin/xray}
 MIERU=${NETSCOPE_VPN_MIERU:-/usr/bin/mieru}
 HYSTERIA=${NETSCOPE_VPN_HYSTERIA:-/usr/bin/hysteria}
 IPT=${NETSCOPE_VPN_IPTABLES:-/usr/sbin/iptables}
+[ -x "$HYSTERIA" ] || HYSTERIA=/mnt/sda1/qwrt-services/hysteria/bin/hysteria
 
 die(){ echo "netscope-vpn-profile: $*" >&2; exit 1; }
 valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
@@ -27,11 +28,11 @@ set_kind(){
     valid_kind "$KIND" || die 'invalid profile kind'
     STATE_DIR="$RUN/$KIND"
     case "$KIND" in
-        wg) IFACE=${NETSCOPE_VPN_WG_IFACE:-nswg0};LINK_TYPE=wireguard;TOOL=$WG;CONF=server.conf;LOCAL_PORT=0;TPROXY_PORT=0;CH_IN=NS_WG_INPUT;CH_FWD=NS_WG_FORWARD;CH_NAT=NS_WG_NAT;;
-        awg) IFACE=${NETSCOPE_VPN_AWG_IFACE:-nsawg0};LINK_TYPE=amneziawg;TOOL=$AWG;CONF=server.conf;LOCAL_PORT=0;TPROXY_PORT=0;CH_IN=NS_AWG_INPUT;CH_FWD=NS_AWG_FORWARD;CH_NAT=NS_AWG_NAT;;
-        vless) IFACE='';LINK_TYPE='';TOOL=$XRAY;CONF=xray.json;LOCAL_PORT=${NETSCOPE_VPN_VLESS_PORT:-2081};TPROXY_PORT=0;CH_IN='';CH_FWD='';CH_NAT='';;
-        mieru) IFACE='';LINK_TYPE='';TOOL=$MIERU;CONF=mieru.json;LOCAL_PORT=${NETSCOPE_VPN_MIERU_PORT:-2082};TPROXY_PORT=0;CH_IN='';CH_FWD='';CH_NAT='';;
-        hy2) IFACE='';LINK_TYPE='';TOOL=$HYSTERIA;CONF=hysteria.yaml;LOCAL_PORT=${NETSCOPE_VPN_HY2_PORT:-2083};TPROXY_PORT=${NETSCOPE_VPN_HY2_TPROXY_PORT:-12347};CH_IN='';CH_FWD='';CH_NAT='';;
+        wg) IFACE=${NETSCOPE_VPN_WG_IFACE:-nswg0};LINK_TYPE=wireguard;TOOL=$WG;CONF=server.conf;LOCAL_PORT=0;TUN_IFACE='';CH_IN=NS_WG_INPUT;CH_FWD=NS_WG_FORWARD;CH_NAT=NS_WG_NAT;;
+        awg) IFACE=${NETSCOPE_VPN_AWG_IFACE:-nsawg0};LINK_TYPE=amneziawg;TOOL=$AWG;CONF=server.conf;LOCAL_PORT=0;TUN_IFACE='';CH_IN=NS_AWG_INPUT;CH_FWD=NS_AWG_FORWARD;CH_NAT=NS_AWG_NAT;;
+        vless) IFACE='';LINK_TYPE='';TOOL=$XRAY;CONF=xray.json;LOCAL_PORT=${NETSCOPE_VPN_VLESS_PORT:-2081};TUN_IFACE='';CH_IN='';CH_FWD='';CH_NAT='';;
+        mieru) IFACE='';LINK_TYPE='';TOOL=$MIERU;CONF=mieru.json;LOCAL_PORT=${NETSCOPE_VPN_MIERU_PORT:-2082};TUN_IFACE='';CH_IN='';CH_FWD='';CH_NAT='';;
+        hy2) IFACE='';LINK_TYPE='';TOOL=$HYSTERIA;CONF=hysteria.yaml;LOCAL_PORT=${NETSCOPE_VPN_HY2_PORT:-2083};TUN_IFACE=${NETSCOPE_VPN_HY2_TUN_IFACE:-nshy2};CH_IN='';CH_FWD='';CH_NAT='';;
     esac
     # Read a WireGuard runtime created by NETSCOPE 0.4 before per-protocol state directories.
     if [ "$KIND" = wg ] && [ ! -d "$STATE_DIR" ] && { [ -f "$RUN/active" ] || [ -f "$RUN/pending" ]; }; then STATE_DIR=$RUN; fi
@@ -50,12 +51,6 @@ listener_up(){
     case "$port" in ''|*[!0-9]*) return 1;; esac
     hex=$(printf '%04X' "$port")
     awk -v p=":$hex" 'toupper($2) ~ p"$" && $4 == "0A" { found=1 } END { exit !found }' /proc/net/tcp /proc/net/tcp6 2>/dev/null
-}
-udp_listener_up(){
-    port=$1
-    case "$port" in ''|*[!0-9]*) return 1;; esac
-    hex=$(printf '%04X' "$port")
-    awk -v p=":$hex" 'toupper($2) ~ p"$" { found=1 } END { exit !found }' /proc/net/udp /proc/net/udp6 2>/dev/null
 }
 drop_jumps(){
     [ -n "$IFACE" ] || return 0
@@ -93,7 +88,7 @@ healthy(){
         ipt -t filter -C FORWARD -j "$CH_FWD" >/dev/null 2>&1 &&
         ipt -t nat -C POSTROUTING -j "$CH_NAT" >/dev/null 2>&1
     elif [ "$KIND" = hy2 ];then
-        pid_alive && listener_up "$LOCAL_PORT" && udp_listener_up "$TPROXY_PORT"
+        pid_alive && listener_up "$LOCAL_PORT" && "$IP" link show dev "$TUN_IFACE" >/dev/null 2>&1
     else pid_alive && listener_up "$LOCAL_PORT";fi
 }
 status(){
@@ -105,7 +100,7 @@ status(){
     printf '{"active":%s,"pending":%s,"healthy":%s,"id":"%s","kind":"%s"' "$(json_bool "$active")" "$(json_bool "$pending")" "$(json_bool "$ok")" "$id" "$KIND"
     [ -z "$IFACE" ] || printf ',"interface":"%s"' "$IFACE"
     [ "$LOCAL_PORT" -eq 0 ] || printf ',"listen":"127.0.0.1","local_port":%s' "$LOCAL_PORT"
-    [ "$TPROXY_PORT" -eq 0 ] || printf ',"tproxy_port":%s' "$TPROXY_PORT"
+    [ -z "$TUN_IFACE" ] || printf ',"tun_interface":"%s"' "$TUN_IFACE"
     printf '}\n'
 }
 begin_pending(){
@@ -150,7 +145,7 @@ start_proxy(){
     [ -x "$TOOL" ] || die 'required proxy runtime unavailable'
     conf="$ROOT/config/setup/$id/$CONF";[ -f "$conf" ] && [ ! -L "$conf" ] || die 'private client configuration unavailable'
     listener_up "$LOCAL_PORT" && die 'dedicated loopback port is already in use'
-    [ "$TPROXY_PORT" -eq 0 ] || ! udp_listener_up "$TPROXY_PORT" || die 'dedicated UDP TProxy port is already in use'
+    [ -z "$TUN_IFACE" ] || ! "$IP" link show dev "$TUN_IFACE" >/dev/null 2>&1 || die 'dedicated HY2 TUN interface is already in use'
     begin_pending "$id"
     printf 'draft=%s\nkind=%s\nlisten=127.0.0.1\nport=%s\n' "$id" "$KIND" "$LOCAL_PORT" >"$STATE_DIR/state"
     mkdir -p "$STATE_DIR/home" "$STATE_DIR/cache";chmod 700 "$STATE_DIR/home" "$STATE_DIR/cache"

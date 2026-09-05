@@ -38,6 +38,9 @@ define Package/luci-app-netscope-setup/install
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-vpn-profile $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-hysteria $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-update $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-route $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-hy2-udp-probe $(1)/usr/libexec/
 endef
 
 $(eval $(call BuildPackage,luci-app-netscope-setup))
