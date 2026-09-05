@@ -9,7 +9,7 @@
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-kind">Protocol</label><div class="cbi-value-field"><select name="kind" id="ns-setup-kind"><option value="wg">WireGuard · remote access home</option><option value="awg">AmneziaWG v1 · remote access home</option><option value="vless">VLESS / Xray · outbound client</option><option value="mieru">Mieru · outbound / future backup</option></select></div></div>
 <div id="ns-setup-tunnel">
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-endpoint">Public endpoint</label><div class="cbi-value-field"><input id="ns-setup-endpoint" name="endpoint" type="text" placeholder="Your public IP or DDNS hostname" maxlength="253"></div></div>
-<div class="cbi-value"><label class="cbi-value-title" for="ns-setup-port">UDP port</label><div class="cbi-value-field"><input id="ns-setup-port" name="port" type="number" min="1" max="65535" value="51821"></div></div>
+<div class="cbi-value"><label class="cbi-value-title" for="ns-setup-port">UDP port</label><div class="cbi-value-field"><input id="ns-setup-port" name="port" type="number" min="1" max="65535" value="51820"><p class="cbi-value-description" id="ns-setup-port-note">The router checks active UDP listeners before generating keys.</p></div></div>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-subnet">New tunnel subnet</label><div class="cbi-value-field"><input id="ns-setup-subnet" name="tunnel" value="10.77.0.0/24"><p class="cbi-value-description">Must not overlap your LAN or office routes.</p></div></div>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-lan">Client routes</label><div class="cbi-value-field"><input id="ns-setup-lan" name="lan" placeholder="LAN / office CIDRs, separated by commas"><p class="cbi-value-description">LAN is detected from this router, not copied from the developer’s network.</p></div></div>
 </div>
@@ -25,8 +25,8 @@
 <div class="cbi-page-actions"><button class="cbi-button cbi-button-apply" id="ns-setup-prepare" type="submit">Prepare private configuration</button></div>
 </fieldset></form>
 <div id="ns-setup-error" class="alert-message warning" role="alert" hidden></div>
-<fieldset id="ns-setup-result" class="cbi-section" hidden><legend>Private configuration</legend><p id="ns-setup-result-title" role="status">Prepared draft · not active</p><p id="ns-setup-note"></p><div id="ns-setup-downloads"></div><p>Server and client downloads contain private credentials. Keep them out of GitHub, chat and screenshots.</p></fieldset>
+<fieldset id="ns-setup-result" class="cbi-section" hidden><legend>Private configuration</legend><p id="ns-setup-result-title" role="status">Prepared draft · not active</p><p id="ns-setup-note"></p><div id="ns-setup-plan" hidden><h3>Activation preview</h3><ul id="ns-setup-plan-list"></ul><h3>Checks completed</h3><ul id="ns-setup-check-list"></ul></div><div id="ns-setup-downloads"></div><p>Server and client downloads contain private credentials. Keep them out of GitHub, chat and screenshots.</p></fieldset>
 <p><% if require('nixio.fs').access('/usr/lib/lua/luci/controller/netscope.lua') then %><a href="<%=url('admin','status','netscope')%>">NETSCOPE · certificates and traffic</a> · <% end %><a href="https://github.com/lststrdst/qwrt-be7000-wifi7-lab" target="_blank" rel="noopener noreferrer">Project &amp; installation guide</a></p>
 </section>
-<script defer src="/luci-static/netscope/setup.js?v=1"></script>
+<script defer src="/luci-static/netscope/setup.js?v=2"></script>
 <%+footer%>

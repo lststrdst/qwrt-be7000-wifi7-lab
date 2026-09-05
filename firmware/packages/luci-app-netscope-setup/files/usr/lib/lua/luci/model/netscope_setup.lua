@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation. No network/service changes.
-local M={VERSION='0.1.0'}
+local M={VERSION='0.2.0'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
@@ -30,13 +30,41 @@ function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru'})}
 end
+local function inventory()
+    local used,routes={},{}
+    local netstat=candidates({'/sbin/netstat','/bin/netstat','/usr/bin/netstat'})
+    if netstat then
+        local ok,out=P.exec({netstat,'-lnu'},3)
+        if ok then for line in out:gmatch('[^\n]+') do local p=tonumber(line:match(':(%d+)%s'));if p then used[p]=true end end end
+    end
+    local ipbin=candidates({'/sbin/ip','/bin/ip','/usr/sbin/ip','/usr/bin/ip'})
+    if ipbin then
+        local ok,out=P.exec({ipbin,'-4','route','show','table','main'},3)
+        if ok then for line in out:gmatch('[^\n]+') do
+            local value=line:match('^(%d+%.%d+%.%d+%.%d+/%d+)') or line:match('^blackhole%s+(%d+%.%d+%.%d+%.%d+/%d+)')
+                or line:match('^(%d+%.%d+%.%d+%.%d+)%s')
+            if value then local ok,block=pcall(cidr,value:find('/',1,true) and value or value..'/32');if ok then routes[#routes+1]=block end end
+        end end
+    end
+    local recommended_port
+    for _,candidate in ipairs({51820,51822,51823,51824,51825}) do if not used[candidate] then recommended_port=candidate;break end end
+    local recommended_tunnel
+    for _,candidate in ipairs({'10.77.0.0/24','10.88.0.0/24','172.31.253.0/24','192.168.77.0/24'}) do
+        local block=cidr(candidate);local overlap=false
+        for _,live in ipairs(routes) do if block.first<=live.last and live.first<=block.last then overlap=true;break end end
+        if not overlap then recommended_tunnel=candidate;break end
+    end
+    return {used=used,routes=routes,recommended_port=recommended_port or 51820,recommended_tunnel=recommended_tunnel or '10.77.0.0/24'}
+end
+M.inventory=inventory
 function M.status()
     local u=require('luci.model.uci').cursor();local address=u:get('network','lan','ipaddr');local mask=u:get('network','lan','netmask') or '255.255.255.0';local lan=''
     local ok,value=pcall(function()local span=4294967296-ip(mask);local bits=32
         while span>1 and span%2==0 do span=span/2;bits=bits-1 end
         need(span==1,'Invalid netmask');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
-    local t=M.tools();return {version=M.VERSION,lan=lan,tools={awg=t.awg~=nil,wg=t.wg~=nil or t.awg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil},storage=C.storage(),mode='prepare-only',
+    local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
+        tools={awg=t.awg~=nil,wg=t.wg~=nil or t.awg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil},storage=C.storage(),mode='prepare-only',
         note='Creates private drafts and checks them. Existing VPNs, firewall and routes are not modified. Activation wizard is not released yet.'}
 end
 local function write(path,data)
@@ -54,6 +82,8 @@ end
 local function tunnel_plan(input,dir)
     local kind=input.kind;local t=M.tools();local tool=t.wg or t.awg;if kind=='awg' then tool=t.awg end;need(tool,'Matching WireGuard/AmneziaWG tools are not installed')
     local endpoint=host(input.endpoint);local listen=port(input.port);local net=cidr(input.tunnel);need(net.bits>=24 and net.bits<=28,'Tunnel prefix must be /24 to /28')
+    local live=inventory();need(not live.used[listen],'UDP port '..listen..' is already in use; choose the suggested free port')
+    for _,block in ipairs(live.routes) do need(net.last<block.first or block.last<net.first,'Tunnel subnet overlaps an active route: '..block.text) end
     local allowed={};local overlaps=false
     for value in tostring(input.lan or ''):gmatch('[^,%s]+') do
         local block=cidr(value);need(#allowed<16,'At most 16 client routes');allowed[#allowed+1]=block.text
@@ -76,7 +106,9 @@ local function tunnel_plan(input,dir)
     local client_config='[Interface]\nPrivateKey = '..client_key..'\nAddress = '..client..'/32\n'..obfuscation..'\n[Peer]\nPublicKey = '..server_pub..'\nEndpoint = '..endpoint..':'..listen..'\nAllowedIPs = '..table.concat(allowed,', ')..', '..dns..'/32\nPersistentKeepalive = 25\n'
     write(dir..'/server.conf',server);write(dir..'/client.conf',client_config)
     return {kind=kind,protocol=kind=='awg' and 'AmneziaWG v1-compatible' or 'WireGuard',state='DRAFT',server_address=dns..'/'..net.bits,client_address=client..'/32',listen_port=listen,
-        routes=allowed,files={'server.conf','client.conf'},note='Unique keys generated. DNS, WAN input, LAN forwarding and interface activation are intentionally not applied. Existing VPNs are untouched.'}
+        routes=allowed,files={'server.conf','client.conf'},checks={'UDP port was free while preparing','Tunnel subnet did not overlap active main-table routes','Private keys are stored only in the downloaded configuration files'},
+        planned_changes={'Create a new VPN interface','Open UDP '..listen..' from WAN','Allow VPN clients to selected LAN/office routes','Provide router DNS only after its listener is verified'},
+        note='Unique keys generated. DNS, WAN input, LAN forwarding and interface activation are intentionally not applied. Existing VPNs are untouched.'}
 end
 local function vless_plan(input,dir)
     need(type(input.profile)=='string' and #input.profile<=12000,'Paste a VLESS outbound JSON (maximum 12 KB)')
