@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXT_SUFFIXES = {"", ".conf", ".example", ".json", ".md", ".py", ".sh", ".txt", ".toml", ".yml", ".yaml"}
-FORBIDDEN_SUFFIXES = {".bin", ".img", ".ipk", ".key", ".pem", ".png", ".qr", ".squashfs", ".tar", ".ubi", ".ubifs"}
+TEXT_SUFFIXES = {"", ".conf", ".example", ".json", ".md", ".py", ".sh", ".txt", ".toml", ".yml", ".yaml", ".lua", ".htm", ".js", ".cjs", ".css"}
+FORBIDDEN_SUFFIXES = {".bin", ".img", ".ipk", ".key", ".pem", ".png", ".qr", ".squashfs", ".tar", ".ubi", ".ubifs", ".pcap", ".pcapng", ".mobileconfig", ".p12", ".pfx"}
 URI_SECRET = re.compile(r"(?i)\b(?:vless|happ|hy2|ss|ssr)://[A-Za-z0-9]")
 KEY_VALUE = re.compile(r"(?im)^\s*(?:PrivateKey|PresharedKey|PublicKey)\s*=\s*([A-Za-z0-9+/]{40,}={0,2})\s*$")
 UUID_VALUE = re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b")

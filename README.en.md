@@ -1,12 +1,20 @@
-# QWRT BE7000 Wi-Fi 7 / MLO Lab
+# NETSCOPE — firmware development for Xiaomi BE7000, based on QWRT
 
 [Русский](README.md) | **English**
 
 [![Tests](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
-An independent, fail-closed research scaffold for bringing the Xiaomi BE7000
-(RC06) stock-like Wi-Fi 7 topology to QWRT R26.02.02 / QSDK 12.5. I also keep
-the IoT diagnostics, recovery runbook and sanitized network templates here.
+I am developing NETSCOPE for Xiaomi BE7000 (RC06), based on QWRT R26.02.02 /
+QSDK 12.5: a router UI, VPN Quick setup, network diagnostics and recovery.
+The original Wi-Fi 7/MLO lab and sanitized network examples remain here.
+
+The new [firmware directory](firmware) contains a Lua LuCI wizard for
+WireGuard, AmneziaWG v1, VLESS/Xray and Mieru. It creates private configuration
+drafts only; automatic activation, routing and failover are not implemented.
+The component was exercised on QWRT, but a compatible SDK build and complete
+flashable image are still pending. The main documentation is in Russian;
+see the [release gates](firmware/RELEASE-CHECKLIST.md) and
+[SSH/XMiR preparation guide](docs/INSTALL-SSH-XMIR.md).
 
 > This repository is **not an official QWRT source fork**, a ready-to-flash
 > firmware image, or a one-click Wi-Fi 7 enabler.

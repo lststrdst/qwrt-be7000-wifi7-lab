@@ -1,12 +1,18 @@
-# QWRT BE7000 Wi-Fi 7 / MLO Lab
+# NETSCOPE — прошивка для Xiaomi BE7000 на базе QWRT
 
 **Русский** | [English](README.en.md)
 
 [![Тесты](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
-Проект посвящён поддержке Wi-Fi 7/MLO для Xiaomi BE7000 (RC06) на QWRT
-R26.02.02 / QSDK 12.5, наблюдению за IoT-устройствами и безопасному возврату роутера
-в рабочее состояние. Здесь же я храню воспроизводимые сетевые примеры без секретов.
+Я разрабатываю NETSCOPE для Xiaomi BE7000 (RC06) на базе QWRT R26.02.02 /
+QSDK 12.5: собственную вебку, VPN Quick setup, наблюдение за сетью и понятное
+восстановление. Отдельно исследую Wi-Fi 7/MLO и храню сетевые примеры без секретов.
+
+Новый [каталог firmware](firmware) содержит первый LuCI-пакет: подготовку
+WireGuard, AmneziaWG, VLESS/Xray и Mieru прямо в вебке. Это пока **черновики
+конфигураций без активации**, не готовые подключения в один клик.
+Есть [гайд SSH через XMiR-Patcher](docs/INSTALL-SSH-XMIR.md) и
+[условия первого релиза](firmware/RELEASE-CHECKLIST.md).
 
 > Это не официальный форк исходников QWRT, не готовая прошивка и не кнопка
 > «включить Wi-Fi 7». Публичного репозитория исходников конкретной сборки

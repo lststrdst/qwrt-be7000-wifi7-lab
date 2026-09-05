@@ -1,0 +1,15 @@
+{
+  "project": "NETSCOPE",
+  "device": "Xiaomi BE7000 (RC06)",
+  "base": "QWRT R26.02.02 / QSDK 12.5",
+  "display_base": "QWRT R26.2.2",
+  "target": "ipq95xx/generic",
+  "architecture": "aarch64_cortex-a53",
+  "kernel_observed": "5.4.213",
+  "build_base_sha256": null,
+  "build_base_revision": null,
+  "release_state": "source-preview",
+  "flashable": false,
+  "packages": ["luci-app-netscope-setup"],
+  "missing_gates": ["pinned-compatible-build-base", "redistribution-and-source-compliance", "clean-image-build", "recovery-and-hardware-acceptance"]
+}

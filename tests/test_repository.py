@@ -43,7 +43,7 @@ class RepositoryTests(unittest.TestCase):
         russian = (ROOT / "README.md").read_text(encoding="utf-8")
         english = (ROOT / "README.en.md").read_text(encoding="utf-8")
         self.assertIn("## Зачем мне это нужно", russian)
-        self.assertIn("безопасному возврату роутера", russian)
+        self.assertIn("восстановление", russian)
         self.assertIn("[English](README.en.md)", russian)
         self.assertIn("[Русский](README.md)", english)
         self.assertIn("## Why I built this", english)
