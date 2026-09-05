@@ -27,7 +27,7 @@ BE7000 является моим основным домашним шлюзом.
 Мне нужен не набор разрозненных скриптов, а понятный продукт, где:
 
 - текущее состояние сети видно в одном интерфейсе;
-- WireGuard, AmneziaWG, VLESS/Xray и Mieru настраиваются через проверяемый
+- WireGuard, AmneziaWG, VLESS/Xray, Mieru и Hysteria 2 настраиваются через проверяемый
   мастер, а не случайными командами из истории shell;
 - каждая сетевая операция имеет preflight, собственный scope и откат;
 - журналы и PCAP-сессии управляются явно и не заполняют внутреннюю flash;
@@ -41,7 +41,7 @@ BE7000 является моим основным домашним шлюзом.
 |---|---|---|
 | NETSCOPE UI | единая русская оболочка LuCI, вход, навигация и версия базы | исходники опубликованы в `luci-theme-netscope`; работает на тестовом роутере |
 | NETSCOPE Traffic | устройства, conntrack, направления, порты, счётчики и управляемые USB PCAP-сессии | исходники опубликованы в `luci-app-netscope`; Capture после установки выключен |
-| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray и Mieru из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; недостающий runtime честно блокирует запуск |
+| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray, Mieru и HY2 из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; недостающий runtime честно блокирует запуск |
 | IoT monitor | доказательства потери Wi‑Fi, DHCP, DNS, WAN или облака | опубликован read-only инструмент |
 | Recovery | бэкапы, известный baseline и порядок возврата | инструкция опубликована; образ восстановления не распространяется |
 | Wi‑Fi 7 / MLO Lab | исследование заводской схемы 5G low + 5G high | только модели, render-only helper и тесты; live apply отсутствует |
@@ -160,6 +160,7 @@ multi-link association клиента.
 
 - [Архитектура](docs/ARCHITECTURE.md)
 - [Текущее состояние и roadmap](docs/ROADMAP.md)
+- [Диагностика Discord Voice и HY2 A/B](docs/DISCORD-VOICE.md)
 - [История изменений](CHANGELOG.md)
 - [OpenWrt Xiaomi BE7000 support work](https://github.com/openwrt/openwrt/pull/20604)
 - [Репозиторий NETSCOPE](https://github.com/lststrdst/netscope-firmware)

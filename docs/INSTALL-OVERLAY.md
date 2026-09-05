@@ -62,7 +62,7 @@ Network/firewall/VPN не перезапускаются.
 ## Что не входит
 
 - бинарная база QWRT и vendor firmware;
-- `tcpdump`, Xray, AmneziaWG и Mieru для систем, где их нет;
+- `tcpdump`, Xray, AmneziaWG, Mieru и Hysteria 2 для систем, где их нет;
 - Docker ARM64 runtime и закреплённый образ mitmproxy;
 - ключи, подписки, CA, backup, MAC-адреса и конфигурация владельца.
 

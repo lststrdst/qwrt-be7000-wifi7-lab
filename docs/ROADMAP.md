@@ -3,7 +3,7 @@
 ## Опубликовано и проверяется CI
 
 - исходник LuCI-приложения VPN Quick setup;
-- протокольно-изолированные runtimes WG, AWG, VLESS/Xray и Mieru с
+- протокольно-изолированные runtimes WG, AWG, VLESS/Xray, Mieru и Hysteria 2 с
   подтверждением, health check и watchdog rollback;
 - русская тема NETSCOPE, Traffic/Devices, USB PCAP и опциональный HTTPS lab;
 - воспроизводимый installable overlay для точной QWRT R26.2.2;
@@ -17,8 +17,8 @@
 
 1. Добавить интеграционные тесты API, iptables cleanup и USB failure.
 2. Упаковать документированный ARM64 Docker runtime для HTTPS lab без vendor blobs.
-3. Добавить policy-routing слой поверх loopback VLESS/Mieru с отдельным rollback.
-4. Проверить AWG и Mieru на реальных внешних серверах; без бинарника их preflight заблокирован.
+3. Добавить policy-routing слой поверх loopback VLESS/Mieru/HY2 с отдельным rollback; первым профилем сделать узкий Discord voice A/B-тест без захвата игр.
+4. Проверить AWG, Mieru и Hysteria 2 на реальных внешних серверах; без бинарника их preflight заблокирован.
 5. Закрепить воспроизводимую QWRT/OpenWrt базу, toolchain и package manifest.
 6. Проверить чистый first boot, обновление и возврат на известную рабочую
    сборку на отдельном стенде.

@@ -11,13 +11,14 @@ WG=${NETSCOPE_VPN_WG:-/usr/bin/wg}
 AWG=${NETSCOPE_VPN_AWG:-/usr/bin/awg}
 XRAY=${NETSCOPE_VPN_XRAY:-/usr/bin/xray}
 MIERU=${NETSCOPE_VPN_MIERU:-/usr/bin/mieru}
+HYSTERIA=${NETSCOPE_VPN_HYSTERIA:-/usr/bin/hysteria}
 IPT=${NETSCOPE_VPN_IPTABLES:-/usr/sbin/iptables}
 
 die(){ echo "netscope-vpn-profile: $*" >&2; exit 1; }
 valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
 valid_cidr(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$'; }
 valid_iface(){ printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9_.-]{1,15}$'; }
-valid_kind(){ case "$1" in wg|awg|vless|mieru) return 0;; *) return 1;; esac; }
+valid_kind(){ case "$1" in wg|awg|vless|mieru|hy2) return 0;; *) return 1;; esac; }
 json_bool(){ [ "$1" = 1 ] && printf true || printf false; }
 ipt(){ "$IPT" -w 3 "$@"; }
 
@@ -30,6 +31,7 @@ set_kind(){
         awg) IFACE=${NETSCOPE_VPN_AWG_IFACE:-nsawg0};LINK_TYPE=amneziawg;TOOL=$AWG;CONF=server.conf;LOCAL_PORT=0;CH_IN=NS_AWG_INPUT;CH_FWD=NS_AWG_FORWARD;CH_NAT=NS_AWG_NAT;;
         vless) IFACE='';LINK_TYPE='';TOOL=$XRAY;CONF=xray.json;LOCAL_PORT=${NETSCOPE_VPN_VLESS_PORT:-2081};CH_IN='';CH_FWD='';CH_NAT='';;
         mieru) IFACE='';LINK_TYPE='';TOOL=$MIERU;CONF=mieru.json;LOCAL_PORT=${NETSCOPE_VPN_MIERU_PORT:-2082};CH_IN='';CH_FWD='';CH_NAT='';;
+        hy2) IFACE='';LINK_TYPE='';TOOL=$HYSTERIA;CONF=hysteria.yaml;LOCAL_PORT=${NETSCOPE_VPN_HY2_PORT:-2083};CH_IN='';CH_FWD='';CH_NAT='';;
     esac
     # Read a WireGuard runtime created by NETSCOPE 0.4 before per-protocol state directories.
     if [ "$KIND" = wg ] && [ ! -d "$STATE_DIR" ] && { [ -f "$RUN/active" ] || [ -f "$RUN/pending" ]; }; then STATE_DIR=$RUN; fi
@@ -144,8 +146,10 @@ start_proxy(){
     mkdir -p "$STATE_DIR/home" "$STATE_DIR/cache";chmod 700 "$STATE_DIR/home" "$STATE_DIR/cache"
     if [ "$KIND" = vless ]; then
         "$TOOL" run -config "$conf" </dev/null >/dev/null 2>&1 &
-    else
+    elif [ "$KIND" = mieru ]; then
         MIERU_CONFIG_JSON_FILE="$conf" XDG_CACHE_HOME="$STATE_DIR/cache" HOME="$STATE_DIR/home" "$TOOL" run </dev/null >/dev/null 2>&1 &
+    else
+        XDG_CACHE_HOME="$STATE_DIR/cache" HOME="$STATE_DIR/home" "$TOOL" client -c "$conf" </dev/null >/dev/null 2>&1 &
     fi
     echo $! >"$STATE_DIR/pid"
     n=0;while ! healthy && [ "$n" -lt 8 ];do sleep 1;n=$((n+1));done

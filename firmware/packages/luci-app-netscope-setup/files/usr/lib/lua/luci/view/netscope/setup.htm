@@ -1,17 +1,21 @@
 <%+header%>
 <section id="netscope-setup" data-api="<%=url('admin','services','netscope_setup')%>" data-token="<%=token%>">
 <h2>Быстрая настройка VPN</h2>
-<p class="cbi-map-descr">WireGuard · AmneziaWG · VLESS / Xray · Mieru. Создание приватных конфигураций непосредственно на роутере. Существующие подключения не перезаписываются.</p>
-<div class="alert-message notice">Любой профиль включается только после новой предварительной проверки и явного подтверждения. WG/AWG используют отдельные интерфейсы и собственные правила NETSCOPE; VLESS/Mieru запускают SOCKS только на loopback. Мастер не меняет UCI, DNS, default route и существующие VPN.</div>
+<p class="cbi-map-descr">WireGuard · AmneziaWG · VLESS / Xray · Mieru · Hysteria 2. Создание приватных конфигураций непосредственно на роутере. Существующие подключения не перезаписываются.</p>
+<div class="alert-message notice">Любой профиль включается только после новой предварительной проверки и явного подтверждения. WG/AWG используют отдельные интерфейсы и собственные правила NETSCOPE; VLESS/Mieru/HY2 запускают SOCKS только на loopback. Мастер не меняет UCI, DNS, default route и существующие VPN.</div>
 <p id="ns-setup-status" role="status">Проверяю необходимые компоненты…</p>
 <form id="ns-setup-form" autocomplete="off">
 <fieldset class="cbi-section"><legend>Быстрая настройка</legend>
-<div class="cbi-value"><label class="cbi-value-title" for="ns-setup-kind">Протокол</label><div class="cbi-value-field"><select name="kind" id="ns-setup-kind"><option value="wg">WireGuard · удалённый доступ домой</option><option value="awg">AmneziaWG v1 · удалённый доступ домой</option><option value="vless">VLESS / Xray · исходящий клиент</option><option value="mieru">Mieru · исходящий резервный канал</option></select></div></div>
+<div class="cbi-value"><label class="cbi-value-title" for="ns-setup-kind">Протокол</label><div class="cbi-value-field"><select name="kind" id="ns-setup-kind"><option value="wg">WireGuard · удалённый доступ домой</option><option value="awg">AmneziaWG v1 · удалённый доступ домой</option><option value="vless">VLESS / Xray · исходящий клиент</option><option value="mieru">Mieru · исходящий резервный канал</option><option value="hy2">Hysteria 2 · UDP-резерв для голоса</option></select></div></div>
 <div id="ns-setup-tunnel">
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-endpoint">Публичная точка подключения</label><div class="cbi-value-field"><input id="ns-setup-endpoint" name="endpoint" type="text" placeholder="Публичный IP-адрес или имя DDNS" maxlength="253"></div></div>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-port">Порт UDP</label><div class="cbi-value-field"><input id="ns-setup-port" name="port" type="number" min="1" max="65535" value="51820"><p class="cbi-value-description" id="ns-setup-port-note">Перед созданием ключей роутер проверяет активные UDP-порты.</p></div></div>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-subnet">Новая подсеть туннеля</label><div class="cbi-value-field"><input id="ns-setup-subnet" name="tunnel" value="10.77.0.0/24"><p class="cbi-value-description">Не должна пересекаться с домашней сетью и офисными маршрутами.</p></div></div>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-lan">Маршруты клиента</label><div class="cbi-value-field"><input id="ns-setup-lan" name="lan" placeholder="Домашние и офисные подсети через запятую"><p class="cbi-value-description">Домашняя подсеть определяется на этом роутере и не копируется из сети разработчика.</p></div></div>
+</div>
+<div id="ns-setup-hy2" hidden>
+<p class="cbi-map-descr">Вставьте один экспортированный узел, а не ссылку на подписку. Профиль создаёт локальный SOCKS5 с UDP, но сам не перенаправляет Discord или игры.</p>
+<div class="cbi-value"><label class="cbi-value-title" for="ns-setup-hy2-uri">Ссылка Hysteria 2</label><div class="cbi-value-field"><textarea id="ns-setup-hy2-uri" name="hy2_uri" rows="4" spellcheck="false" maxlength="4096" placeholder="hysteria2://… или hy2://…"></textarea><p class="cbi-value-description">Секретное поле очищается после подготовки. Проверка TLS не может быть отключена без pinSHA256.</p></div></div>
 </div>
 <div id="ns-setup-vless" hidden><div class="cbi-value"><label class="cbi-value-title" for="ns-setup-profile">Исходящий профиль VLESS в JSON</label><div class="cbi-value-field"><textarea id="ns-setup-profile" name="profile" rows="8" spellcheck="false" maxlength="12000" placeholder="Вставьте один исходящий объект VLESS для Xray"></textarea><p class="cbi-value-description">Секретное поле: данные не сохраняются в браузере и не отправляются в аналитику. Требуется TLS или Reality. Ссылки подписок и полные конфигурации Xray пока не принимаются.</p></div></div></div>
 <div id="ns-setup-mieru" hidden>
@@ -26,8 +30,8 @@
 </fieldset></form>
 <div id="ns-setup-error" class="alert-message warning" role="alert" hidden></div>
 <fieldset id="ns-setup-result" class="cbi-section" hidden><legend>Приватная конфигурация</legend><p id="ns-setup-result-title" role="status">Черновик подготовлен · не активен</p><p id="ns-setup-note"></p><div id="ns-setup-plan" hidden><h3>Предпросмотр включения</h3><ul id="ns-setup-plan-list"></ul><h3>Выполненные проверки</h3><ul id="ns-setup-check-list"></ul></div><div id="ns-setup-downloads"></div><p>Серверный и клиентский файлы содержат приватные данные. Не публикуйте их на GitHub, в чатах и снимках экрана.</p></fieldset>
-<fieldset class="cbi-section"><legend>Сохранённые приватные черновики</legend><p class="cbi-map-descr">Хранятся только на USB-накопителе роутера. Предварительная проверка повторно проверяет runtime, порты, маршруты и файлы, не меняя систему. Включение транзакционное для всех четырёх протоколов: неподтверждённый запуск откатывается watchdog, а остановка удаляет только собственный интерфейс или процесс NETSCOPE. Удаляется только выбранный неактивный черновик.</p><div id="ns-setup-drafts" aria-live="polite">Загружаю сохранённые черновики…</div></fieldset>
+<fieldset class="cbi-section"><legend>Сохранённые приватные черновики</legend><p class="cbi-map-descr">Хранятся только на USB-накопителе роутера. Предварительная проверка повторно проверяет runtime, порты, маршруты и файлы, не меняя систему. Включение транзакционное для всех пяти протоколов: неподтверждённый запуск откатывается watchdog, а остановка удаляет только собственный интерфейс или процесс NETSCOPE. Удаляется только выбранный неактивный черновик.</p><div id="ns-setup-drafts" aria-live="polite">Загружаю сохранённые черновики…</div></fieldset>
 <p><% if require('nixio.fs').access('/usr/lib/lua/luci/controller/netscope.lua') then %><a href="<%=url('admin','status','netscope')%>">NETSCOPE · сертификаты и трафик</a> · <% end %><a href="https://github.com/lststrdst/netscope-firmware" target="_blank" rel="noopener noreferrer">Проект и инструкция по установке</a></p>
 </section>
-<script defer src="/luci-static/netscope/setup.js?v=6"></script>
+<script defer src="/luci-static/netscope/setup.js?v=7"></script>
 <%+footer%>

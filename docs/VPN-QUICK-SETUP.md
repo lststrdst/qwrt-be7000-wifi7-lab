@@ -13,6 +13,7 @@
 | AmneziaWG | Такие же конфиги с согласованными параметрами AWG v1 | Совместимый AWG runtime и отдельная проверка клиента; это не AWG 2/3 |
 | VLESS / Xray | `xray.json`, локальный SOCKS на `127.0.0.1:2081` | Xray binary; policy routing/DNS/failover настраиваются отдельным слоем |
 | Mieru | `mieru.json`, SOCKS только на loopback, порт 2082 | Сервер и совместимый Mieru binary; policy routing включается отдельно |
+| Hysteria 2 | `hysteria.yaml`, SOCKS5 с UDP только на `127.0.0.1:2083` | Один экспортированный узел `hysteria2://`/`hy2://`, runtime Hysteria 2; адресная маршрутизация включается отдельно |
 
 ### WireGuard / AmneziaWG
 
@@ -36,8 +37,8 @@ default route. Серверный файл — native setconf, адрес инт
 ### Транзакционная активация
 
 WG создаёт только `nswg0` и `NS_WG_*`; AWG — `nsawg0` и `NS_AWG_*`.
-VLESS/Xray и Mieru запускают отдельный процесс, слушающий только
-`127.0.0.1:2081` или `127.0.0.1:2082`. Активатор не выполняет `uci commit`,
+VLESS/Xray, Mieru и Hysteria 2 запускают отдельный процесс, слушающий только
+`127.0.0.1:2081`, `127.0.0.1:2082` или `127.0.0.1:2083`. Активатор не выполняет `uci commit`,
 не меняет DNS/default route, не перезапускает network/firewall и не трогает
 другие VPN. Для WG/AWG разрешены только выбранные LAN/office CIDR.
 
@@ -63,6 +64,21 @@ TCP/raw, WebSocket, gRPC и XHTTP с TLS/Reality. Проверка сертиф�
 Формат взят из [документации Mieru](https://github.com/enfein/mieru/blob/main/docs/client-install.md).
 Preflight требует установленный runtime и свободный loopback-порт. Автоматический
 failover пока не реализован. Пароль сервера не нужно присылать или добавлять в Git.
+
+### Hysteria 2
+
+Мастер принимает один экспортированный узел `hysteria2://` или `hy2://`, но не
+подписку. URI хранится только в приватном черновике на USB и очищается из формы
+после подготовки. Создаётся native-конфигурация Hysteria 2 с `lazy: true` и
+SOCKS5/UDP на `127.0.0.1:2083`. Если URI содержит `insecure=1`/`true`, без
+`pinSHA256` подготовка блокируется.
+
+Сам запуск профиля не меняет DNS, default route или firewall и поэтому не
+перенаправляет Discord автоматически. Для голосового A/B-теста позже нужен
+отдельный адресный policy-routing слой: только подтверждённые динамические
+Discord voice endpoints выбранного устройства, без Cloudflare целиком и без
+всего игрового UDP. Это предотвращает случайный захват Dota/Steam и остальных
+устройств домашней сети.
 
 ## Хранение и безопасность
 
@@ -94,7 +110,7 @@ protocol-scoped runtime-объекты; UCI/default route остаются не�
 На QWRT R26.2.2: 57 проверок backend в приватных временных USB-каталогах,
 включая настоящие ключи и Xray `-test`. Тестовые ключи удалены после проверки.
 36 браузерных проверок на синтетической странице и 15 lifecycle-проверок
-WG/AWG/VLESS/Mieru в disposable network namespace.
+WG/AWG/VLESS/Mieru/HY2 в disposable network namespace.
 Тестовые данные — не пользовательские профили.
 
 Сквозной тест каждого нового профиля с внешнего клиента всё равно требуется:

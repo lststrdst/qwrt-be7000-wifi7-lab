@@ -57,8 +57,8 @@ VPN Quick setup разделяет подготовку и применение:
 6. Watchdog снимает только изменения этого runtime, если нет подтверждения.
 
 WG и AWG получают отдельные интерфейсы и только собственные firewall chains.
-VLESS/Xray и Mieru запускаются как независимые loopback SOCKS runtimes. У всех
-четырёх протоколов отдельное состояние, двухфазное подтверждение и watchdog;
+VLESS/Xray, Mieru и Hysteria 2 запускаются как независимые loopback SOCKS runtimes. У всех
+пяти протоколов отдельное состояние, двухфазное подтверждение и watchdog;
 отсутствующий бинарник блокирует preflight. DNS, default route и policy routing
 этот мастер намеренно не меняет.
 

@@ -28,13 +28,13 @@ NETSCOPE Traffic/Devices, bounded USB PCAP, metadata decoder и опционал
 LuCI-приложение **VPN Quick setup**:
 
 - создаёт уникальные приватные drafts для WireGuard/AmneziaWG;
-- валидирует VLESS/Xray и подготавливает Mieru-шаблон;
+- валидирует VLESS/Xray и подготавливает Mieru/Hysteria 2;
 - проверяет занятые порты и пересечения подсетей;
 - хранит приватные файлы с `0700/0600`;
 - не пишет секреты в browser storage;
 - не меняет UCI и default route;
 - для WG/AWG использует отдельные интерфейсы и именованные rules;
-- для VLESS/Mieru использует отдельные loopback SOCKS-процессы;
+- для VLESS/Mieru/Hysteria 2 использует отдельные loopback SOCKS-процессы;
 - у каждого runtime есть preflight, подтверждение и watchdog rollback;
 - не меняет DNS, default route и policy routing.
 
@@ -65,7 +65,7 @@ overlay воспроизводим из опубликованных компо�
 - полного исходного дерева QWRT R26.02.02;
 - first-boot wizard и генерации уникальных device keys/CA;
 - переносимого Docker ARM64 runtime для HTTPS lab;
-- policy-routing слоя для подготовленных VLESS/Mieru SOCKS;
+- policy-routing слоя для подготовленных VLESS/Mieru/Hysteria 2 SOCKS;
 - проверенного sysupgrade/factory image.
 
 ## Как собрать текущий overlay

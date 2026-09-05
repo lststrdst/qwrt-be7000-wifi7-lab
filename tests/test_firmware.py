@@ -84,8 +84,10 @@ class FirmwareSourceTests(unittest.TestCase):
             self.assertNotIn(forbidden, manager)
         for owned in ('NS_WG_INPUT', 'NS_WG_FORWARD', 'NS_WG_NAT', 'NS_AWG_INPUT', 'NS_AWG_FORWARD', 'NS_AWG_NAT'):
             self.assertIn(owned, manager)
-        for protocol in ('wg', 'awg', 'vless', 'mieru'):
+        for protocol in ('wg', 'awg', 'vless', 'mieru', 'hy2'):
             self.assertIn(protocol, manager)
+        self.assertIn('HYSTERIA=${NETSCOPE_VPN_HYSTERIA', manager)
+        self.assertIn('hysteria.yaml', manager)
         self.assertIn('status [kind]', manager)
         self.assertIn("stop|rollback)", manager)
         self.assertIn("confirm)", manager)
@@ -94,8 +96,19 @@ class FirmwareSourceTests(unittest.TestCase):
     def test_menu_and_device_identity(self):
         view = (FILES/'usr/lib/lua/luci/view/netscope/setup.htm').read_text(encoding='utf-8')
         self.assertIn('<h2>Быстрая настройка VPN</h2>', view)
-        for protocol in ('wg', 'awg', 'vless', 'mieru'):
+        for protocol in ('wg', 'awg', 'vless', 'mieru', 'hy2'):
             self.assertIn('value="'+protocol+'"', view)
         self.assertIn('явного подтверждения', view)
+
+    def test_hysteria2_draft_is_loopback_only_and_tls_guarded(self):
+        model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')
+        js = (FILES/'www/luci-static/netscope/setup.js').read_text(encoding='utf-8')
+        self.assertIn("uri:match('^hysteria2://')", model)
+        self.assertIn("uri:match('^hy2://')", model)
+        self.assertIn("listen: 127.0.0.1:2083", model)
+        self.assertIn("disableUDP: false", model)
+        self.assertIn("Нельзя отключать проверку TLS без pinSHA256", model)
+        self.assertIn("el('hy2-uri').value=''", js)
+        self.assertNotIn('localStorage', js)
 
 if __name__ == '__main__': unittest.main()

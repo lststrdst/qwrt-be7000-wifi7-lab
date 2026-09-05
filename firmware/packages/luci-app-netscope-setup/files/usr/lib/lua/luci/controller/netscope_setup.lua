@@ -28,7 +28,7 @@ local function locked(action)
     if not ok then h.status(400,'Ошибка запроса');h.write_json({error=tostring(result):match(':%d+: (.*)') or 'Запрос завершился ошибкой'}) else h.write_json(result) end
 end
 function prepare()
-    locked(function(h)local input={};for _,key in ipairs({'kind','endpoint','port','tunnel','lan','profile','mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password'}) do input[key]=h.formvalue(key) end
+    locked(function(h)local input={};for _,key in ipairs({'kind','endpoint','port','tunnel','lan','profile','mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password','hy2_uri'}) do input[key]=h.formvalue(key) end
         return require('luci.model.netscope_setup').prepare(input) end)
 end
 function preflight()locked(function(h)return require('luci.model.netscope_setup').preflight(h.formvalue('draft'))end)end

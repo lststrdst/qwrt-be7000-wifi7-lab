@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation and explicit transactional activation.
-local M={VERSION='0.5.0'}
+local M={VERSION='0.6.0-dev'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
@@ -29,6 +29,7 @@ local function candidates(paths)for _,p in ipairs(paths) do if fs.access(p,'x') 
 function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
+        hysteria=candidates({'/usr/bin/hysteria','/usr/sbin/hysteria','/mnt/sda1/qwrt-services/hysteria/bin/hysteria'}),
         manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
 end
 local function inventory()
@@ -68,8 +69,8 @@ function M.status()
         need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
-        note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray и Mieru. Каждый профиль использует только собственный интерфейс или loopback-порт.'
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray, Mieru и Hysteria 2. Каждый профиль использует только собственный интерфейс или loopback-порт.'
             or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
 local function write(path,data)
@@ -153,19 +154,34 @@ local function mieru_plan(input,dir)
         note=template and 'Только шаблон: замените server.example.invalid и оба значения CHANGE_ME данными будущего сервера Mieru. Служба и резервирование не настраивались.'
             or 'Подготовлен отдельный локальный SOCKS-профиль. Он начнёт принимать подключения только после preflight и явного включения; автоматическая маршрутизация трафика не добавляется.'}
 end
+local function hy2_plan(input,dir)
+    local uri=input.hy2_uri or ''
+    need(type(uri)=='string' and #uri>=16 and #uri<=4096 and not uri:find('%s') and not uri:find('%c'),'Вставьте одну ссылку Hysteria 2 без пробелов (не более 4 КБ)')
+    need(uri:match('^hysteria2://') or uri:match('^hy2://'),'Ожидается одна ссылка hysteria2:// или hy2://, а не подписка')
+    local lower=uri:lower();local insecure=lower:find('[?&]insecure=1') or lower:find('[?&]insecure=true')
+    local pinned=lower:find('[?&]pinsha256=[^&#]+')
+    need(not insecure or pinned,'Нельзя отключать проверку TLS без pinSHA256')
+    -- JSON string syntax is a valid quoted YAML scalar and avoids YAML injection.
+    local config='server: '..json.stringify(uri)..'\nlazy: true\nsocks5:\n  listen: 127.0.0.1:2083\n  disableUDP: false\n'
+    write(dir..'/hysteria.yaml',config)
+    return {kind='hy2',protocol='Hysteria 2',state='DRAFT',validated=false,files={'hysteria.yaml'},local_port=2083,
+        checks={'Принимается ровно одна ссылка hysteria2:// или hy2://','SOCKS5 с UDP слушает только 127.0.0.1:2083','Отключение проверки TLS разрешено только вместе с pinSHA256'},
+        planned_changes={'Запустить отдельный процесс Hysteria 2 из приватного черновика','Проверить процесс и SOCKS-listener 127.0.0.1:2083','Не менять default route, DNS, UCI, Discord-маршруты и другие VPN'},
+        note='Подготовлен отдельный HY2 SOCKS5/UDP-профиль. Он не перехватывает Discord или игры: адресная policy routing добавляется отдельным безопасным этапом после A/B-теста.'}
+end
 function M.prepare(input)
-    need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru'),'Выберите WireGuard, AmneziaWG, VLESS или Mieru')
+    need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru' or input.kind=='hy2'),'Выберите WireGuard, AmneziaWG, VLESS, Mieru или Hysteria 2')
     local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>16000000,'Требуется доступный для записи USB-накопитель со свободным местом')
     local root=C.ROOT..'/config/setup';C.mkdir(C.ROOT..'/config');C.mkdir(root)
     local count=0;for _ in fs.dir(root) do count=count+1 end;need(count<20,'Достигнут предел в 20 черновиков; безопасно архивируйте или удалите старые')
     local id=os.date('!%Y%m%dT%H%M%S')..'-'..require('luci.sys').uniqueid(5);need(id:match('^[%w%-]+$'),'Некорректный идентификатор черновика')
     local dir=root..'/'..id;need(not fs.lstat(dir),'Конфликт идентификатора черновика');C.mkdir(dir)
     local ok,result=pcall(function()
-        local result=(input.kind=='vless' and vless_plan or input.kind=='mieru' and mieru_plan or tunnel_plan)(input,dir)
+        local result=(input.kind=='vless' and vless_plan or input.kind=='mieru' and mieru_plan or input.kind=='hy2' and hy2_plan or tunnel_plan)(input,dir)
         result.id=id;C.atomic(dir..'/plan.json',result);return result
     end)
     if not ok then
-        for _,name in ipairs({'server.key','client.key','server.conf','client.conf','xray.json','mieru.json','plan.json','plan.json.new'}) do fs.unlink(dir..'/'..name) end
+        for _,name in ipairs({'server.key','client.key','server.conf','client.conf','xray.json','mieru.json','hysteria.yaml','plan.json','plan.json.new'}) do fs.unlink(dir..'/'..name) end
         fs.rmdir(dir);error(tostring(result):match(':%d+: (.*)') or 'Подготовка завершилась ошибкой')
     end
     return result
@@ -173,10 +189,10 @@ end
 function M.download(id,file)
     local storage=C.storage();need(storage.mounted and not storage.error,'USB недоступен')
     need(C.valid_id(id),'Некорректный черновик')
-    need(file=='server.conf' or file=='client.conf' or file=='xray.json' or file=='mieru.json' or file=='plan.json','Некорректный файл')
+    need(file=='server.conf' or file=='client.conf' or file=='xray.json' or file=='mieru.json' or file=='hysteria.yaml' or file=='plan.json','Некорректный файл')
     local path=C.ROOT..'/config/setup/'..id..'/'..file;need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Черновик недоступен');return path
 end
-local allowed_files={['server.conf']=true,['client.conf']=true,['xray.json']=true,['mieru.json']=true,['plan.json']=true}
+local allowed_files={['server.conf']=true,['client.conf']=true,['xray.json']=true,['mieru.json']=true,['hysteria.yaml']=true,['plan.json']=true}
 local function draft(id)
     need(C.valid_id(id),'Некорректный черновик')
     local dir=C.ROOT..'/config/setup/'..id;need(C.safe(dir) and (fs.lstat(dir) or {}).type=='dir','Черновик недоступен')
@@ -196,7 +212,7 @@ M.runtime_status=function(kind)return runtime_status(M.tools().manager,kind or '
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end
     local root=C.ROOT..'/config/setup';if (fs.lstat(root) or {}).type~='dir' then return {} end
-    local manager=M.tools().manager;local active={};for _,kind in ipairs({'wg','awg','vless','mieru'}) do active[kind]=runtime_status(manager,kind) end
+    local manager=M.tools().manager;local active={};for _,kind in ipairs({'wg','awg','vless','mieru','hy2'}) do active[kind]=runtime_status(manager,kind) end
     local out={};for id in fs.dir(root) do
         if C.valid_id(id) and #out<20 then local ok,value=pcall(draft,id);if ok then
             local live=active[value.kind] or {}
@@ -232,6 +248,10 @@ function M.preflight(id)
     elseif value.kind=='mieru' then
         result(value.state~='TEMPLATE','Данные сервера Mieru настроены')
         result(tools.mieru~=nil,'Среда Mieru установлена')
+        result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
+        activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
+    elseif value.kind=='hy2' then
+        result(tools.hysteria~=nil,'Среда Hysteria 2 установлена')
         result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
         activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
     else result(false,'Протокол черновика поддерживается') end

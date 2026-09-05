@@ -13,7 +13,7 @@
  function error(message){el('error').hidden=!message;el('error').textContent=message||'';}
  function list(name,items){const target=el(name);target.replaceChildren();for(const item of items||[])target.append(Object.assign(document.createElement('li'),{textContent:item}));}
  function action(label,handler){const button=document.createElement('button');button.type='button';button.className='cbi-button cbi-button-action';button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;error('');try{await handler(button);}catch(e){error(e.message);}finally{button.disabled=false;}});return button;}
- function protocolName(draft){return draft.protocol||({wg:'WireGuard',awg:'AmneziaWG',vless:'VLESS / Xray',mieru:'Mieru'}[draft.kind])||'VPN';}
+ function protocolName(draft){return draft.protocol||({wg:'WireGuard',awg:'AmneziaWG',vless:'VLESS / Xray',mieru:'Mieru',hy2:'Hysteria 2'}[draft.kind])||'VPN';}
  async function loadDrafts(){
   const target=el('drafts'),value=await api('drafts');target.replaceChildren();
   if(!(value.drafts||[]).length){target.textContent='Сохранённых черновиков нет.';return;}
@@ -31,15 +31,15 @@
   }
  }
  el('kind').onchange=()=>{const kind=el('kind').value;
-  for(const name of ['tunnel','vless','mieru']){const enabled=name==='tunnel'?(kind==='wg'||kind==='awg'):name===kind;el(name).hidden=!enabled;el(name).querySelectorAll('input,select,textarea').forEach(field=>field.disabled=!enabled);}
+  for(const name of ['tunnel','vless','mieru','hy2']){const enabled=name==='tunnel'?(kind==='wg'||kind==='awg'):name===kind;el(name).hidden=!enabled;el(name).querySelectorAll('input,select,textarea').forEach(field=>field.disabled=!enabled);}
   el('result').hidden=true;error('');
  };el('kind').onchange();
  el('form').onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;el('prepare').disabled=true;error('');el('result').hidden=true;el('kind').disabled=true;
-  try{const params=new URLSearchParams(new FormData(el('form')));params.set('kind',el('kind').value);params.set('token',root.dataset.token);const v=await api('prepare',params);el('profile').value='';el('mieru-password').value='';el('result-title').textContent=v.state==='TEMPLATE'?'Шаблон · требуется сервер':'Черновик подготовлен · не активен';el('note').textContent=v.note;
+  try{const params=new URLSearchParams(new FormData(el('form')));params.set('kind',el('kind').value);params.set('token',root.dataset.token);const v=await api('prepare',params);el('profile').value='';el('mieru-password').value='';el('hy2-uri').value='';el('result-title').textContent=v.state==='TEMPLATE'?'Шаблон · требуется сервер':'Черновик подготовлен · не активен';el('note').textContent=v.note;
    list('plan-list',v.planned_changes);list('check-list',v.checks);el('plan').hidden=!(v.planned_changes?.length||v.checks?.length);
-   const downloads=el('downloads');downloads.replaceChildren();for(const file of [...(v.files||[]),'plan.json']){if(!['server.conf','client.conf','xray.json','mieru.json','plan.json'].includes(file))continue;const a=document.createElement('a');a.textContent=file==='plan.json'?'Скачать обезличенный план':'Скачать '+file;a.href=root.dataset.api+'/download?'+new URLSearchParams({draft:v.id,file});a.download='';a.className='cbi-button cbi-button-link';downloads.append(a,document.createTextNode(' '));}el('result').hidden=false;await loadDrafts();}
+   const downloads=el('downloads');downloads.replaceChildren();for(const file of [...(v.files||[]),'plan.json']){if(!['server.conf','client.conf','xray.json','mieru.json','hysteria.yaml','plan.json'].includes(file))continue;const a=document.createElement('a');a.textContent=file==='plan.json'?'Скачать обезличенный план':'Скачать '+file;a.href=root.dataset.api+'/download?'+new URLSearchParams({draft:v.id,file});a.download='';a.className='cbi-button cbi-button-link';downloads.append(a,document.createTextNode(' '));}el('result').hidden=false;await loadDrafts();}
   catch(e){error(e.message);}finally{busy=false;el('prepare').disabled=false;el('kind').disabled=false;}
  };
- api('status').then(v=>{if(!el('lan').value)el('lan').value=v.lan||'';if(!touched.port)el('port').value=v.recommended_port||51820;if(!touched.subnet)el('subnet').value=v.recommended_tunnel||'10.77.0.0/24';el('port-note').textContent='Предложенный свободный UDP-порт: '+(v.recommended_port||51820)+'. Он будет проверен повторно при подготовке.';el('status').textContent='USB: '+(v.storage?.mounted&&v.storage?.writable?'готов':'требуется')+' · диспетчер: '+(v.tools?.manager?'готов':'не найден')+' · WireGuard: '+(v.tools?.wg?'готов':'не найден')+' · AmneziaWG: '+(v.tools?.awg?'готов':'не найден')+' · Xray: '+(v.tools?.xray?'готов':'не найден')+' · Mieru: '+(v.tools?.mieru?'готов':'не найден');}).catch(e=>error(e.message));
+ api('status').then(v=>{if(!el('lan').value)el('lan').value=v.lan||'';if(!touched.port)el('port').value=v.recommended_port||51820;if(!touched.subnet)el('subnet').value=v.recommended_tunnel||'10.77.0.0/24';el('port-note').textContent='Предложенный свободный UDP-порт: '+(v.recommended_port||51820)+'. Он будет проверен повторно при подготовке.';el('status').textContent='USB: '+(v.storage?.mounted&&v.storage?.writable?'готов':'требуется')+' · диспетчер: '+(v.tools?.manager?'готов':'не найден')+' · WireGuard: '+(v.tools?.wg?'готов':'не найден')+' · AmneziaWG: '+(v.tools?.awg?'готов':'не найден')+' · Xray: '+(v.tools?.xray?'готов':'не найден')+' · Mieru: '+(v.tools?.mieru?'готов':'не найден')+' · Hysteria 2: '+(v.tools?.hysteria?'готов':'не найден');}).catch(e=>error(e.message));
  loadDrafts().catch(e=>error(e.message));
 })();
