@@ -30,7 +30,7 @@ function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
         hysteria=candidates({'/usr/bin/hysteria','/usr/sbin/hysteria','/mnt/sda1/qwrt-services/hysteria/bin/hysteria'}),
-        manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
+        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
 end
 local function inventory()
     local used_udp,used_tcp,routes={},{},{}
@@ -69,7 +69,7 @@ function M.status()
         need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
         note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray, Mieru и Hysteria 2. Каждый профиль использует только собственный интерфейс или loopback-порт.'
             or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
@@ -209,6 +209,14 @@ local function runtime_status(manager,kind)
     return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port}
 end
 M.runtime_status=function(kind)return runtime_status(M.tools().manager,kind or 'wg')end
+function M.install_hysteria()
+    local tools=M.tools();need(not tools.hysteria,'Hysteria 2 уже установлена')
+    local installer=need(tools.hysteria_installer,'Проверенный установщик Hysteria 2 отсутствует')
+    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>33554432,'Требуется writable USB со свободными 32 МиБ')
+    local ok,out=P.exec({installer},120);need(ok,'Установка Hysteria 2 не выполнена: '..tostring(out):sub(1,240))
+    local installed=M.tools().hysteria;need(installed~=nil,'Установщик завершился без доступного runtime')
+    return {installed=true,path=installed,version='v2.11.0',note='Runtime проверен по закреплённому SHA-256 и установлен на USB. Он не запущен; DNS, маршруты и firewall не менялись.'}
+end
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end
     local root=C.ROOT..'/config/setup';if (fs.lstat(root) or {}).type~='dir' then return {} end

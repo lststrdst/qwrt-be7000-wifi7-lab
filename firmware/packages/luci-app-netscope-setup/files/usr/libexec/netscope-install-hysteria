@@ -1,0 +1,52 @@
+#!/bin/sh
+# Install one pinned official Hysteria 2 ARM64 runtime on USB. Never starts it.
+set -eu
+umask 077
+
+VERSION=v2.11.0
+SHA256=fa19cad58c8d2d93aae9be31bfbb75e40f8f8ee7563fbd9ae9f775334d46cd69
+URL=https://github.com/apernet/hysteria/releases/download/app/v2.11.0/hysteria-linux-arm64
+ROOT=/mnt/sda1/qwrt-services/hysteria
+DEST=$ROOT/bin/hysteria
+TMP=$ROOT/.hysteria-$VERSION.$$
+
+die(){ echo "netscope-install-hysteria: $*" >&2; exit 1; }
+cleanup(){ rm -f "$TMP"; }
+trap cleanup EXIT HUP INT TERM
+
+case "$(uname -m)" in aarch64|arm64) ;; *) die 'unsupported architecture; aarch64 required';; esac
+grep -qE '^[^ ]+ /mnt/sda1 [^ ]+ rw(,| )' /proc/mounts || die 'writable /mnt/sda1 is required'
+for path in /mnt/sda1/qwrt-services "$ROOT" "$ROOT/bin"; do [ ! -L "$path" ] || die 'symlink in destination path'; done
+mkdir -p "$ROOT/bin";chmod 700 "$ROOT" "$ROOT/bin"
+command -v sha256sum >/dev/null 2>&1 || die 'sha256sum is required'
+
+if [ -f "$DEST" ] && [ ! -L "$DEST" ]; then
+    current=$(sha256sum "$DEST" | awk '{print $1}')
+    [ "$current" = "$SHA256" ] && { echo "HYSTERIA_RUNTIME=READY VERSION=$VERSION";exit 0; }
+    die 'another Hysteria runtime already exists; refusing to overwrite it'
+fi
+[ ! -e "$DEST" ] || die 'unsafe destination object'
+[ ! -e "$TMP" ] || die 'temporary path collision'
+
+free_kb=$(df -Pk /mnt/sda1 | awk 'NR==2 {print $4}')
+case "$free_kb" in ''|*[!0-9]*) die 'cannot determine free USB space';; esac
+[ "$free_kb" -ge 32768 ] || die 'at least 32 MiB free USB space is required'
+
+if command -v uclient-fetch >/dev/null 2>&1; then
+    uclient-fetch -q -O "$TMP" "$URL"
+elif command -v curl >/dev/null 2>&1; then
+    curl --fail --location --silent --show-error --output "$TMP" "$URL"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$TMP" "$URL"
+else
+    die 'uclient-fetch, curl or wget is required'
+fi
+
+actual=$(sha256sum "$TMP" | awk '{print $1}')
+[ "$actual" = "$SHA256" ] || die 'downloaded binary checksum mismatch'
+chmod 700 "$TMP"
+version_output=$("$TMP" version 2>&1) || die 'downloaded binary failed its version check'
+printf '%s\n' "$version_output" | grep -q "$VERSION" || die 'downloaded binary reported an unexpected version'
+mv "$TMP" "$DEST"
+trap - EXIT HUP INT TERM
+echo "HYSTERIA_RUNTIME=INSTALLED VERSION=$VERSION"

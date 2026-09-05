@@ -9,6 +9,7 @@ function index()
     entry({'admin','services','netscope_setup','deactivate'},post('deactivate')).leaf=true
     entry({'admin','services','netscope_setup','delete'},post('delete')).leaf=true
     entry({'admin','services','netscope_setup','download'},call('download')).leaf=true
+    entry({'admin','services','netscope_setup','install_hysteria'},post('install_hysteria')).leaf=true
 end
 local function headers()
     local h=require'luci.http';h.header('Cache-Control','no-store');h.header('X-Content-Type-Options','nosniff');h.header('Referrer-Policy','no-referrer');h.header('X-Frame-Options','SAMEORIGIN');return h
@@ -35,6 +36,7 @@ function preflight()locked(function(h)return require('luci.model.netscope_setup'
 function activate()locked(function(h)return require('luci.model.netscope_setup').activate(h.formvalue('draft'))end)end
 function deactivate()locked(function(h)return require('luci.model.netscope_setup').deactivate(h.formvalue('draft'))end)end
 function delete()locked(function(h)return require('luci.model.netscope_setup').delete(h.formvalue('draft'))end)end
+function install_hysteria()locked(function()return require('luci.model.netscope_setup').install_hysteria()end)end
 function download()
     local h=headers();if h.getenv('REQUEST_METHOD')~='GET' then h.status(405,'Требуется GET');return end
     local ok,path=pcall(require('luci.model.netscope_setup').download,h.formvalue('draft'),h.formvalue('file'))

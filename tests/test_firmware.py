@@ -53,6 +53,7 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/lib/lua/luci/model/netscope_setup_runtime.lua',
             'usr/lib/lua/luci/view/netscope/setup.htm',
             'usr/libexec/netscope-vpn-profile',
+            'usr/libexec/netscope-install-hysteria',
             'www/luci-static/netscope/setup.js',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}
@@ -110,5 +111,16 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn("Нельзя отключать проверку TLS без pinSHA256", model)
         self.assertIn("el('hy2-uri').value=''", js)
         self.assertNotIn('localStorage', js)
+
+    def test_hysteria_runtime_installer_is_pinned_and_never_starts_vpn(self):
+        installer = (FILES/'usr/libexec/netscope-install-hysteria').read_text(encoding='utf-8')
+        self.assertIn('VERSION=v2.11.0', installer)
+        self.assertIn('SHA256=fa19cad58c8d2d93aae9be31bfbb75e40f8f8ee7563fbd9ae9f775334d46cd69', installer)
+        self.assertIn('hysteria-linux-arm64', installer)
+        self.assertIn('checksum mismatch', installer)
+        self.assertNotIn('| sh', installer)
+        self.assertNotIn('eval ', installer)
+        self.assertNotIn('/etc/init.d/', installer)
+        self.assertNotIn('iptables', installer)
 
 if __name__ == '__main__': unittest.main()

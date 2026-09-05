@@ -4,6 +4,7 @@
 <p class="cbi-map-descr">WireGuard · AmneziaWG · VLESS / Xray · Mieru · Hysteria 2. Создание приватных конфигураций непосредственно на роутере. Существующие подключения не перезаписываются.</p>
 <div class="alert-message notice">Любой профиль включается только после новой предварительной проверки и явного подтверждения. WG/AWG используют отдельные интерфейсы и собственные правила NETSCOPE; VLESS/Mieru/HY2 запускают SOCKS только на loopback. Мастер не меняет UCI, DNS, default route и существующие VPN.</div>
 <p id="ns-setup-status" role="status">Проверяю необходимые компоненты…</p>
+<p id="ns-setup-runtime-actions" hidden><button class="cbi-button cbi-button-action" id="ns-setup-install-hy2" type="button">Установить Hysteria 2 runtime на USB</button> <span id="ns-setup-install-hy2-note">Закреплённая официальная ARM64-сборка; профиль и маршруты не запускаются.</span></p>
 <form id="ns-setup-form" autocomplete="off">
 <fieldset class="cbi-section"><legend>Быстрая настройка</legend>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-kind">Протокол</label><div class="cbi-value-field"><select name="kind" id="ns-setup-kind"><option value="wg">WireGuard · удалённый доступ домой</option><option value="awg">AmneziaWG v1 · удалённый доступ домой</option><option value="vless">VLESS / Xray · исходящий клиент</option><option value="mieru">Mieru · исходящий резервный канал</option><option value="hy2">Hysteria 2 · UDP-резерв для голоса</option></select></div></div>
