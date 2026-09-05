@@ -108,9 +108,15 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn("uri:match('^hy2://')", model)
         self.assertIn("listen: 127.0.0.1:2083", model)
         self.assertIn("disableUDP: false", model)
+        self.assertIn("udpTProxy:\\n  listen: :12347\\n  timeout: 20s", model)
+        self.assertIn("tproxy_port=12347", model)
         self.assertIn("Нельзя отключать проверку TLS без pinSHA256", model)
         self.assertIn("el('hy2-uri').value=''", js)
         self.assertNotIn('localStorage', js)
+        manager = (FILES/'usr/libexec/netscope-vpn-profile').read_text(encoding='utf-8')
+        self.assertIn('NETSCOPE_VPN_HY2_TPROXY_PORT:-12347', manager)
+        self.assertIn('udp_listener_up "$TPROXY_PORT"', manager)
+        self.assertIn('HYSTERIA_DISABLE_UPDATE_CHECK=1', manager)
 
     def test_hysteria_runtime_installer_is_pinned_and_never_starts_vpn(self):
         installer = (FILES/'usr/libexec/netscope-install-hysteria').read_text(encoding='utf-8')

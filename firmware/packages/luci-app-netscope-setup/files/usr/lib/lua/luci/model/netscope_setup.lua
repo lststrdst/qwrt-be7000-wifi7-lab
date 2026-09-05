@@ -162,12 +162,12 @@ local function hy2_plan(input,dir)
     local pinned=lower:find('[?&]pinsha256=[^&#]+')
     need(not insecure or pinned,'Нельзя отключать проверку TLS без pinSHA256')
     -- JSON string syntax is a valid quoted YAML scalar and avoids YAML injection.
-    local config='server: '..json.stringify(uri)..'\nlazy: true\nsocks5:\n  listen: 127.0.0.1:2083\n  disableUDP: false\n'
+    local config='server: '..json.stringify(uri)..'\nlazy: true\nsocks5:\n  listen: 127.0.0.1:2083\n  disableUDP: false\nudpTProxy:\n  listen: :12347\n  timeout: 20s\n'
     write(dir..'/hysteria.yaml',config)
-    return {kind='hy2',protocol='Hysteria 2',state='DRAFT',validated=false,files={'hysteria.yaml'},local_port=2083,
-        checks={'Принимается ровно одна ссылка hysteria2:// или hy2://','SOCKS5 с UDP слушает только 127.0.0.1:2083','Отключение проверки TLS разрешено только вместе с pinSHA256'},
-        planned_changes={'Запустить отдельный процесс Hysteria 2 из приватного черновика','Проверить процесс и SOCKS-listener 127.0.0.1:2083','Не менять default route, DNS, UCI, Discord-маршруты и другие VPN'},
-        note='Подготовлен отдельный HY2 SOCKS5/UDP-профиль. Он не перехватывает Discord или игры: адресная policy routing добавляется отдельным безопасным этапом после A/B-теста.'}
+    return {kind='hy2',protocol='Hysteria 2',state='DRAFT',validated=false,files={'hysteria.yaml'},local_port=2083,tproxy_port=12347,
+        checks={'Принимается ровно одна ссылка hysteria2:// или hy2://','SOCKS5 с UDP слушает только 127.0.0.1:2083','Native UDP TProxy подготовлен на отдельном порту 12347','Отключение проверки TLS разрешено только вместе с pinSHA256'},
+        planned_changes={'Запустить отдельный процесс Hysteria 2 из приватного черновика','Проверить SOCKS 127.0.0.1:2083 и UDP TProxy :12347','Не менять default route, DNS, UCI, voice-маршруты и другие VPN'},
+        note='Подготовлен отдельный HY2 SOCKS5/UDP + native UDP TProxy-профиль. Сам listener ничего не перехватывает: узкая policy routing для звонков включается отдельно после A/B-теста.'}
 end
 function M.prepare(input)
     need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru' or input.kind=='hy2'),'Выберите WireGuard, AmneziaWG, VLESS, Mieru или Hysteria 2')
@@ -206,7 +206,7 @@ local function runtime_status(manager,kind)
     local value=json.parse(out);if type(value)~='table' or value.kind~=(kind or 'wg') or (value.id~='' and not C.valid_id(value.id)) then
         return {active=false,pending=false,healthy=false,id='',kind=kind,error='Некорректное состояние среды выполнения'}
     end
-    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port}
+    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port,tproxy_port=value.tproxy_port}
 end
 M.runtime_status=function(kind)return runtime_status(M.tools().manager,kind or 'wg')end
 function M.install_hysteria()
@@ -226,7 +226,7 @@ function M.list()
             local live=active[value.kind] or {}
             out[#out+1]={id=id,created=id:sub(1,8)..' '..id:sub(10,15)..' UTC',kind=value.kind,protocol=value.protocol,
                 state=value.state,validated=value.validated==true,listen_port=value.listen_port,server_address=value.server_address,
-                local_port=value.local_port,files=value.files or {},note=value.note,active=live.active and live.id==id,pending=live.pending and live.id==id,healthy=live.healthy and live.id==id}
+                local_port=value.local_port,tproxy_port=value.tproxy_port,files=value.files or {},note=value.note,active=live.active and live.id==id,pending=live.pending and live.id==id,healthy=live.healthy and live.id==id}
         end end
     end
     table.sort(out,function(a,b)return a.id>b.id end);return out
@@ -261,6 +261,7 @@ function M.preflight(id)
     elseif value.kind=='hy2' then
         result(tools.hysteria~=nil,'Среда Hysteria 2 установлена')
         result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
+        result(type(value.tproxy_port)=='number' and not live.used_udp[value.tproxy_port],'Локальный UDP TProxy-порт '..tostring(value.tproxy_port)..' свободен')
         activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
     else result(false,'Протокол черновика поддерживается') end
     return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=activation_supported,stage='activation-ready',checks=checks,blockers=blockers,
@@ -291,7 +292,7 @@ function M.activate(id)
     end
     local confirmed,final=P.exec({manager,'confirm',value.kind,id},8);if not confirmed then P.exec({manager,'rollback',value.kind,id},8);error('Не удалось подтвердить профиль; выполнен откат') end
     local state=json.parse(final);need(type(state)=='table' and state.kind==value.kind and state.active and state.healthy and state.id==id,'Подтверждение профиля вернуло некорректное состояние')
-    return {id=id,active=true,healthy=true,kind=value.kind,interface=state.interface,listen=state.listen,local_port=state.local_port,
+    return {id=id,active=true,healthy=true,kind=value.kind,interface=state.interface,listen=state.listen,local_port=state.local_port,tproxy_port=state.tproxy_port,
         note='Отдельный профиль '..tostring(value.protocol or value.kind)..' активен. Существующие VPN, L2TP, UCI, DNS и маршрут по умолчанию не изменялись.'}
 end
 function M.deactivate(id)
