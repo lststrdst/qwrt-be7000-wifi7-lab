@@ -5,6 +5,8 @@ function index()
     entry({'admin','services','netscope_setup','drafts'},call('drafts')).leaf=true
     entry({'admin','services','netscope_setup','prepare'},post('prepare')).leaf=true
     entry({'admin','services','netscope_setup','preflight'},post('preflight')).leaf=true
+    entry({'admin','services','netscope_setup','activate'},post('activate')).leaf=true
+    entry({'admin','services','netscope_setup','deactivate'},post('deactivate')).leaf=true
     entry({'admin','services','netscope_setup','delete'},post('delete')).leaf=true
     entry({'admin','services','netscope_setup','download'},call('download')).leaf=true
 end
@@ -30,6 +32,8 @@ function prepare()
         return require('luci.model.netscope_setup').prepare(input) end)
 end
 function preflight()locked(function(h)return require('luci.model.netscope_setup').preflight(h.formvalue('draft'))end)end
+function activate()locked(function(h)return require('luci.model.netscope_setup').activate(h.formvalue('draft'))end)end
+function deactivate()locked(function(h)return require('luci.model.netscope_setup').deactivate(h.formvalue('draft'))end)end
 function delete()locked(function(h)return require('luci.model.netscope_setup').delete(h.formvalue('draft'))end)end
 function download()
     local h=headers();if h.getenv('REQUEST_METHOD')~='GET' then h.status(405,'GET required');return end

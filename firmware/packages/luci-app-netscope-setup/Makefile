@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-netscope-setup
-PKG_VERSION:=0.3.0
+PKG_VERSION:=0.4.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=lststrdst
@@ -13,13 +13,14 @@ define Package/luci-app-netscope-setup
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
   TITLE:=NETSCOPE VPN Quick setup (configuration drafts)
-  DEPENDS:=+luci-base +luci-lib-nixio +luci-lib-jsonc +libuci-lua
+  DEPENDS:=+luci-base +luci-lib-nixio +luci-lib-jsonc +libuci-lua +wireguard-tools +kmod-wireguard +iptables
   PKGARCH:=all
 endef
 
 define Package/luci-app-netscope-setup/description
   Authenticated Lua LuCI wizard for private WireGuard, AmneziaWG v1,
-  VLESS/Xray and Mieru configuration drafts. No VPN autostart or firewall changes.
+  VLESS/Xray and Mieru configuration drafts. Plain WireGuard has an explicit,
+  transactional runtime with scoped firewall rules and no default-route change.
   Requires writable storage mounted at /mnt/sda1; VPN binaries are optional.
 endef
 
@@ -33,6 +34,8 @@ define Package/luci-app-netscope-setup/install
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/netscope $(1)/www/luci-static/netscope
 	$(INSTALL_DATA) ./files/usr/lib/lua/luci/view/netscope/setup.htm $(1)/usr/lib/lua/luci/view/netscope/
 	$(INSTALL_DATA) ./files/www/luci-static/netscope/setup.js $(1)/www/luci-static/netscope/
+	$(INSTALL_DIR) $(1)/usr/libexec
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-vpn-profile $(1)/usr/libexec/
 endef
 
 $(eval $(call BuildPackage,luci-app-netscope-setup))

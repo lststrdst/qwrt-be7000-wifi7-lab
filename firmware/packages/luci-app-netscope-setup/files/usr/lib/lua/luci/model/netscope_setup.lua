@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation. No network/service changes.
-local M={VERSION='0.3.0'}
+local M={VERSION='0.4.0'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
@@ -28,7 +28,8 @@ M.cidr=cidr
 local function candidates(paths)for _,p in ipairs(paths) do if fs.access(p,'x') then return p end end end
 function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
-        wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru'})}
+        wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru'}),
+        manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
 end
 local function inventory()
     local used,routes={},{}
@@ -64,8 +65,9 @@ function M.status()
         need(span==1,'Invalid netmask');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil or t.awg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil},storage=C.storage(),mode='prepare-only',
-        note='Creates private drafts and checks them. Existing VPNs, firewall and routes are not modified. Activation wizard is not released yet.'}
+        tools={awg=t.awg~=nil,wg=t.wg~=nil or t.awg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'wg-activation' or 'prepare-only',
+        note=t.manager and 'Private drafts plus transactional activation for a separate plain WireGuard interface. AWG, Xray and Mieru activation remain unavailable.'
+            or 'Creates private drafts and checks them. Existing VPNs, firewall and routes are not modified. Activation manager is not installed.'}
 end
 local function write(path,data)
     need(C.safe(path) and not fs.lstat(path),'Draft path already exists or is unsafe')
@@ -174,14 +176,21 @@ local function draft(id)
     local value=json.parse(need(C.read(path,20000),'Draft plan unavailable'));need(type(value)=='table' and value.id==id,'Invalid draft plan')
     return value,dir
 end
+local function runtime_status(manager)
+    if not manager then return {active=false,pending=false,healthy=false,id=''} end
+    local ok,out=P.exec({manager,'status'},3);if not ok then return {active=false,pending=false,healthy=false,id='',error='Runtime status unavailable'} end
+    local value=json.parse(out);if type(value)~='table' or (value.id~='' and not C.valid_id(value.id)) then return {active=false,pending=false,healthy=false,id='',error='Invalid runtime status'} end
+    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',interface=value.interface}
+end
+M.runtime_status=function()return runtime_status(M.tools().manager)end
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end
     local root=C.ROOT..'/config/setup';if (fs.lstat(root) or {}).type~='dir' then return {} end
-    local out={};for id in fs.dir(root) do
+    local active=runtime_status(M.tools().manager);local out={};for id in fs.dir(root) do
         if C.valid_id(id) and #out<20 then local ok,value=pcall(draft,id);if ok then
             out[#out+1]={id=id,created=id:sub(1,8)..' '..id:sub(10,15)..' UTC',kind=value.kind,protocol=value.protocol,
                 state=value.state,validated=value.validated==true,listen_port=value.listen_port,server_address=value.server_address,
-                files=value.files or {},note=value.note}
+                files=value.files or {},note=value.note,active=active.active and active.id==id,pending=active.pending and active.id==id}
         end end
     end
     table.sort(out,function(a,b)return a.id>b.id end);return out
@@ -193,7 +202,7 @@ function M.preflight(id)
     for _,name in ipairs(value.files or {}) do
         local st=allowed_files[name] and fs.lstat(dir..'/'..name);result(st and st.type=='reg','Private file '..tostring(name)..' is present and not a symlink')
     end
-    local tools=M.tools();local live=inventory()
+    local tools=M.tools();local live=inventory();local activation_supported=false
     if value.kind=='wg' or value.kind=='awg' then
         result((value.kind=='wg' and tools.wg or tools.awg)~=nil,'Matching tunnel tools are installed')
         result(type(value.listen_port)=='number' and not live.used[value.listen_port],'UDP '..tostring(value.listen_port)..' is still free')
@@ -202,6 +211,8 @@ function M.preflight(id)
         result(not overlap,'Tunnel subnet still does not overlap the main routing table')
         result((C.read('/proc/sys/net/ipv4/ip_forward',8) or ''):match('1')~=nil,'IPv4 forwarding is enabled')
         result(candidates({'/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables'})~=nil,'iptables is available')
+        if value.kind=='wg' then activation_supported=tools.manager~=nil;result(activation_supported,'Transactional WireGuard manager is installed')
+        else result(false,'AmneziaWG activation is not released; the existing awg_remote service will not be replaced') end
     elseif value.kind=='vless' then
         result(tools.xray~=nil,'Xray runtime is installed')
         if tools.xray then local ok=P.exec({tools.xray,'run','-test','-config',dir..'/xray.json'},6);result(ok,'Xray accepts the saved configuration') end
@@ -211,12 +222,12 @@ function M.preflight(id)
         result(tools.mieru~=nil,'Mieru runtime is installed')
         result(false,'Mieru failover activation remains intentionally unavailable')
     else result(false,'Draft protocol is supported') end
-    return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=false,stage='preflight-only',checks=checks,blockers=blockers,
+    return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=activation_supported,stage='preflight-only',checks=checks,blockers=blockers,
         rollback={'Remove NETSCOPE-owned redirect/input/forward rules first','Stop only the new profile process','Remove only its dedicated interface','Restore its own saved files; never restart network/firewall'},
         note='Read-only preflight completed. No interface, process, route, DNS or firewall rule was changed.'}
 end
 function M.delete(id)
-    local value,dir=draft(id);need(not fs.lstat(C.RUN..'/active-'..id),'Stop the profile before deleting its private files')
+    local value,dir=draft(id);local active=runtime_status(M.tools().manager);need(active.id~=id or not (active.active or active.pending),'Stop the profile before deleting its private files')
     local seen={};for name in fs.dir(dir) do
         need(allowed_files[name] and not seen[name],'Draft contains an unexpected file; refusing automatic deletion')
         local st=fs.lstat(dir..'/'..name);need(st and st.type=='reg','Draft contains a non-regular file; refusing automatic deletion');seen[name]=true
@@ -224,5 +235,23 @@ function M.delete(id)
     for name in pairs(seen) do need(fs.unlink(dir..'/'..name),'Could not delete private draft file') end
     need(fs.rmdir(dir),'Could not remove private draft directory')
     return {id=id,deleted=true,kind=value.kind,note='Private draft deleted. No running VPN or network setting was changed.'}
+end
+function M.activate(id)
+    local value=draft(id);need(value.kind=='wg','Transactional activation is currently available only for plain WireGuard')
+    local report=M.preflight(id);need(report.ready and report.activation_supported,'Activation preflight is blocked')
+    local manager=need(M.tools().manager,'Transactional manager is not installed');local network=cidr(value.server_address).text
+    local argv={manager,'start',id,value.server_address,network,tostring(value.listen_port)};for _,route in ipairs(value.routes or {}) do argv[#argv+1]=route end
+    local ok,out=P.exec(argv,12);if not ok then error('WireGuard start failed and was rolled back: '..tostring(out):sub(1,240)) end
+    local pending=json.parse(out);if type(pending)~='table' or not pending.pending or pending.id~=id or not pending.healthy then P.exec({manager,'rollback',id},6);error('WireGuard did not reach a healthy pending state; rolled back') end
+    local confirmed,final=P.exec({manager,'confirm',id},6);if not confirmed then P.exec({manager,'rollback',id},6);error('WireGuard confirmation failed; rolled back') end
+    local state=json.parse(final);need(type(state)=='table' and state.active and state.healthy and state.id==id,'WireGuard confirmation returned invalid status')
+    return {id=id,active=true,healthy=true,kind='wg',interface=state.interface,note='Separate WireGuard profile is active. Existing AWG, Xray, L2TP, UCI and default route were not changed.'}
+end
+function M.deactivate(id)
+    need(C.valid_id(id),'Invalid draft');local manager=need(M.tools().manager,'Transactional manager is not installed');local state=runtime_status(manager)
+    need(state.id==id and (state.active or state.pending),'Selected profile is not active')
+    local ok,out=P.exec({manager,'stop',id},8);need(ok,'Profile cleanup failed; inspect NETSCOPE-owned chains before retrying')
+    local final=json.parse(out);need(type(final)=='table' and not final.active and not final.pending and not final.healthy,'Profile cleanup returned invalid status')
+    return {id=id,active=false,kind='wg',note='NETSCOPE rules were removed first, then the dedicated interface. Other VPNs and routes were untouched.'}
 end
 return M

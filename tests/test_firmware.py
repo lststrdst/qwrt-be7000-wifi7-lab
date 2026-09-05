@@ -20,6 +20,7 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/lib/lua/luci/model/netscope_setup.lua',
             'usr/lib/lua/luci/model/netscope_setup_runtime.lua',
             'usr/lib/lua/luci/view/netscope/setup.htm',
+            'usr/libexec/netscope-vpn-profile',
             'www/luci-static/netscope/setup.js',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}
@@ -33,7 +34,8 @@ class FirmwareSourceTests(unittest.TestCase):
     def test_wizard_no_activation_or_secret_persistence(self):
         controller = (FILES/'usr/lib/lua/luci/controller/netscope_setup.lua').read_text()
         self.assertIn("post('prepare')", controller)
-        self.assertNotIn("post('activate')", controller)
+        self.assertIn("post('activate')", controller)
+        self.assertIn("post('deactivate')", controller)
         js = (FILES/'www/luci-static/netscope/setup.js').read_text()
         self.assertNotIn('localStorage', js)
         self.assertNotIn('sessionStorage', js)
@@ -42,11 +44,17 @@ class FirmwareSourceTests(unittest.TestCase):
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text()
         for forbidden in ('uci commit', '/etc/init.d/', 'wg-quick up'):
             self.assertNotIn(forbidden, model)
-        self.assertNotIn("post('activate')", controller)
         self.assertIn("post('preflight')", controller)
         self.assertIn("post('delete')", controller)
         self.assertIn("socks5ListenLAN=false", model)
-        self.assertIn("mode='prepare-only'", model)
+        manager = (FILES/'usr/libexec/netscope-vpn-profile').read_text()
+        for forbidden in ('uci commit', 'firewall restart', 'network restart', 'ip route add default', 'iptables -F', 'iptables -t nat -F'):
+            self.assertNotIn(forbidden, manager)
+        for owned in ('NS_WG_INPUT', 'NS_WG_FORWARD', 'NS_WG_NAT'):
+            self.assertIn(owned, manager)
+        self.assertIn("stop|rollback)", manager)
+        self.assertIn("confirm)", manager)
+        self.assertIn("sleep \"$GUARD_SECONDS\"", manager)
 
     def test_menu_and_device_identity(self):
         view = (FILES/'usr/lib/lua/luci/view/netscope/setup.htm').read_text()
