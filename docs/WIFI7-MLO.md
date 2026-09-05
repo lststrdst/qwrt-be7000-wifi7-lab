@@ -1,4 +1,4 @@
-# Wi‑Fi 7 / MLO Lab для Xiaomi BE7000
+# NETSCOPE Wi‑Fi 7 / MLO Lab для Xiaomi BE7000
 
 ## Цель
 

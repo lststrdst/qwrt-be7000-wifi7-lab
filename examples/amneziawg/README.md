@@ -1,4 +1,4 @@
-# AmneziaWG remote access
+# NETSCOPE AmneziaWG remote access
 
 Этот пример показывает отдельный userspace-интерфейс AmneziaWG для удалённого
 доступа домой. Я не заменяю им обычный WAN и не открываю UDP 7/9 для WOL.

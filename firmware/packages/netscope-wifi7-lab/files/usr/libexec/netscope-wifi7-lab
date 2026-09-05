@@ -2,8 +2,8 @@
 
 set -eu
 
-ROOT="${BE7000_ROOT:-}"
-PROFILE="${BE7000_PROFILE:-${ROOT}/etc/be7000-wifi7/profile.conf}"
+ROOT="${NETSCOPE_ROOT:-}"
+PROFILE="${NETSCOPE_WIFI7_PROFILE:-${ROOT}/etc/netscope/wifi7/profile.conf}"
 
 fail() {
 	printf 'FAIL: %s\n' "$*" >&2
@@ -38,7 +38,7 @@ preflight() {
 
 render() {
 	preflight
-	out="${1:-$(root_path /tmp/be7000-wifi7-render)}"
+	out="${1:-$(root_path /tmp/netscope-wifi7-render)}"
 	umask 077
 	mkdir -p "$out"
 	{
@@ -64,7 +64,7 @@ render() {
 
 case "${1:-status}" in
 	status)
-		printf 'BE7000_WIFI7_LAB=installed\n'
+		printf 'NETSCOPE_WIFI7_LAB=installed\n'
 		printf 'LIVE_APPLY_ALLOWED=%s\n' "$LIVE_APPLY_ALLOWED"
 		;;
 	preflight)
@@ -78,6 +78,6 @@ case "${1:-status}" in
 		fail 'live activation is intentionally absent from this package'
 		;;
 	*)
-		fail 'usage: be7000-wifi7-lab {status|preflight|render [directory]}'
+		fail 'usage: netscope-wifi7-lab {status|preflight|render [directory]}'
 		;;
 esac

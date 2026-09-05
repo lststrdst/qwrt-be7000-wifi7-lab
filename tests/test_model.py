@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from be7000_wifi7_lab import scenarios
+from netscope_firmware import scenarios
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +59,7 @@ class TransactionTests(unittest.TestCase):
         self.assertFalse(gate["live_apply_allowed"])
 
     def test_openwrt_helper_has_no_live_mutation_primitives(self) -> None:
-        helper = (ROOT / "openwrt-package/files/usr/libexec/be7000-wifi7-lab").read_text(
+        helper = (ROOT / "firmware/packages/netscope-wifi7-lab/files/usr/libexec/netscope-wifi7-lab").read_text(
             encoding="utf-8"
         )
         forbidden = (

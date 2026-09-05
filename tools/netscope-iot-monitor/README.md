@@ -1,9 +1,9 @@
-# Монитор IoT-соединений
+# NETSCOPE IoT monitor
 
 [English](README.en.md)
 
-Лёгкий read-only монитор для QWRT/OpenWrt. Он помогает отличить потерю
-ассоциации Wi-Fi от сбоя DHCP, DNS, WAN или облачного сервиса устройства.
+Лёгкий read-only компонент NETSCOPE для QWRT/OpenWrt. Он помогает отличить
+потерю ассоциации Wi-Fi от сбоя DHCP, DNS, WAN или облачного сервиса устройства.
 
 Монитор записывает:
 
@@ -19,11 +19,11 @@
 ## Установка на USB
 
 ```sh
-mkdir -p /mnt/sda1/qwrt-services/iot-monitor/logs
-cp iot-monitor.sh /mnt/sda1/qwrt-services/iot-monitor/
-cp targets.example /mnt/sda1/qwrt-services/iot-monitor/targets.conf
-chmod 700 /mnt/sda1/qwrt-services/iot-monitor/iot-monitor.sh
-chmod 600 /mnt/sda1/qwrt-services/iot-monitor/targets.conf
+mkdir -p /mnt/sda1/NETSCOPE/iot-monitor/logs
+cp netscope-iot-monitor.sh /mnt/sda1/NETSCOPE/iot-monitor/
+cp targets.example /mnt/sda1/NETSCOPE/iot-monitor/targets.conf
+chmod 700 /mnt/sda1/NETSCOPE/iot-monitor/netscope-iot-monitor.sh
+chmod 600 /mnt/sda1/NETSCOPE/iot-monitor/targets.conf
 ```
 
 Формат одной строки `targets.conf`:
@@ -38,14 +38,14 @@ chmod 600 /mnt/sda1/qwrt-services/iot-monitor/targets.conf
 Запуск:
 
 ```sh
-nohup /mnt/sda1/qwrt-services/iot-monitor/iot-monitor.sh \
-  >/mnt/sda1/qwrt-services/iot-monitor/logs/runner.log 2>&1 </dev/null &
+nohup /mnt/sda1/NETSCOPE/iot-monitor/netscope-iot-monitor.sh \
+  >/mnt/sda1/NETSCOPE/iot-monitor/logs/runner.log 2>&1 </dev/null &
 ```
 
 Остановка:
 
 ```sh
-kill "$(cat /mnt/sda1/qwrt-services/iot-monitor/iot-monitor.pid)"
+kill "$(cat /mnt/sda1/NETSCOPE/iot-monitor/iot-monitor.pid)"
 ```
 
 Результаты находятся в `logs/health.log` и `logs/events.log`. При достижении

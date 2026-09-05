@@ -1,4 +1,4 @@
-name: Лабораторные тесты
+name: NETSCOPE verification
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       - run: python tools/check_public.py
       - run: node --check firmware/packages/luci-app-netscope-setup/files/www/luci-static/netscope/setup.js
       - run: |
-          sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab
-          sh -n tools/iot-monitor/iot-monitor.sh
+          sh -n firmware/packages/netscope-wifi7-lab/files/usr/libexec/netscope-wifi7-lab
+          sh -n tools/netscope-iot-monitor/netscope-iot-monitor.sh
           sh -n examples/l2tp/route-guard.sh
           sh -n examples/amneziawg/run-userspace.sh

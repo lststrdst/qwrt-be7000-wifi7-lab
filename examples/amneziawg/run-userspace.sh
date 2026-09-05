@@ -2,8 +2,8 @@
 
 set -eu
 
-AWG_GO=${AWG_GO:-/mnt/sda1/qwrt-services/amneziawg/bin/amneziawg-go}
-AWG=${AWG:-/mnt/sda1/qwrt-services/amneziawg/bin/awg}
+AWG_GO=${AWG_GO:-/mnt/sda1/NETSCOPE/amneziawg/bin/amneziawg-go}
+AWG=${AWG:-/mnt/sda1/NETSCOPE/amneziawg/bin/awg}
 CONFIG=${CONFIG:-/etc/amneziawg/awg_remote.conf}
 IFACE=${IFACE:-awg_remote}
 ADDRESS=${ADDRESS:-10.77.0.1/24}

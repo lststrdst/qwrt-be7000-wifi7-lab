@@ -1,4 +1,5 @@
 * text=auto
+.gitattributes text eol=lf
 *.py text eol=lf
 *.md text eol=lf
 *.json text eol=lf
@@ -7,8 +8,11 @@
 *.yaml text eol=lf
 *.conf text eol=lf
 *.sh text eol=lf
+*.lua text eol=lf
+*.htm text eol=lf
+*.js text eol=lf
 Makefile text eol=lf
-openwrt-package/files/usr/libexec/* text eol=lf
-tools/iot-monitor/targets.example text eol=lf
+firmware/packages/netscope-wifi7-lab/files/usr/libexec/* text eol=lf
+tools/netscope-iot-monitor/* text eol=lf
 examples/**/*.example text eol=lf
 examples/**/*.sh text eol=lf

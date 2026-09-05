@@ -1,6 +1,6 @@
-# L2TP/IPsec client для QWRT
+# NETSCOPE L2TP/IPsec client
 
-Этот пример рассчитан на IKEv1/IPsec transport mode, L2TP и PAP. Я запускаю
+Этот пример рассчитан на базу QWRT и IKEv1/IPsec transport mode, L2TP и PAP. Я запускаю
 strongSwan, xl2tpd и pppd в определённом порядке отдельным управляющим
 сценарием.
 

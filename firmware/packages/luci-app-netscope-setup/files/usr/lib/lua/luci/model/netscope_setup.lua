@@ -27,7 +27,7 @@ end
 M.cidr=cidr
 local function candidates(paths)for _,p in ipairs(paths) do if fs.access(p,'x') then return p end end end
 function M.tools()
-    return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
+    return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/NETSCOPE/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru'}),
         manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
 end

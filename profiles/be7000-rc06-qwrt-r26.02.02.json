@@ -1,5 +1,5 @@
 {
-  "name": "xiaomi-be7000-rc06-qwrt-r26.02.02-mlo-lab",
+  "name": "netscope-xiaomi-be7000-rc06-qwrt-r26.02.02-wifi7-lab",
   "board_model": "xiaomi,be7000",
   "qca_board_name": "ap-al02-c6",
   "target": {

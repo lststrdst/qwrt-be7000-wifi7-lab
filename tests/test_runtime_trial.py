@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from be7000_wifi7_lab import RuntimeTrialPolicy, no_uart_scenarios, simulate_no_uart_trial
+from netscope_firmware import RuntimeTrialPolicy, no_uart_scenarios, simulate_no_uart_trial
 
 
 ROOT = Path(__file__).resolve().parents[1]

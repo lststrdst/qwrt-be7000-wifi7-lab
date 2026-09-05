@@ -1,111 +1,136 @@
-# NETSCOPE — firmware for Xiaomi BE7000, based on QWRT
+# NETSCOPE
+
+**A home firmware project for Xiaomi BE7000, based on QWRT**
 
 [Русский](README.md) | **English**
 
-[![Tests](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
+[![NETSCOPE verification](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml)
 
-I am developing NETSCOPE as a firmware project for Xiaomi BE7000 (RC06),
-based on QWRT R26.02.02 / QSDK 12.5. The goal is a coherent home gateway:
-an English LuCI shell, network visibility, guarded VPN setup, documented
-recovery and an explicitly experimental Wi‑Fi 7/MLO lab.
+I develop NETSCOPE as a coherent software layer for my Xiaomi BE7000 (RC06):
+an English web UI, network visibility, guarded VPN setup, recovery, IoT
+diagnostics and a separate Wi‑Fi 7/MLO lab.
 
-NETSCOPE keeps its base visible as `Based on QWRT` and preserves the original
-QWRT attribution. It is not an official QWRT project.
+The current base is QWRT R26.02.02 / QSDK 12.5. NETSCOPE keeps the origin
+visible as `Based on QWRT` and preserves upstream authorship and licensing. It
+is not an official QWRT, Xiaomi, Qualcomm or OpenWrt project.
 
-> There is no public flashable NETSCOPE image yet. This repository contains
-> component sources, tests, sanitized examples and release gates. A firmware
-> image will only be published after the build base, backup slot and recovery
-> path are reproducible.
+> This repository is currently an open source tree of future firmware
+> components, not a flashable image. It does not contain the complete source
+> tree of the matching QWRT binary build, and no public NETSCOPE image has been
+> released. Working features, lab models and plans are labelled separately.
 
-## Why I built this
+## Why I am building it
 
 The BE7000 is my primary home gateway. It carries direct internet traffic,
-remote access, IoT devices, an office tunnel and selective routing. QWRT is the
-low-level base I need, but daily operation benefits from safer transactions,
-one consistent UI and diagnostics that do not require ad-hoc shell commands.
+remote access, IoT devices, selective routing and an office tunnel. I want a
+maintainable product instead of a collection of one-off shell commands:
 
-The project follows four rules:
+- one interface for current network state;
+- guarded setup for WireGuard, AmneziaWG, VLESS/Xray and Mieru;
+- preflight, isolated scope and rollback for every network mutation;
+- explicit PCAP/session storage that does not fill internal flash;
+- a stable IoT segment with controlled access from the main LAN;
+- Wi‑Fi 7 experiments that cannot silently enter the boot path;
+- a documented return to a known-good state.
 
-- keep the original QWRT functionality reachable;
-- give every network change a preflight, isolated scope and rollback path;
-- keep live credentials and device-specific data out of Git;
-- keep experimental features off by default and label them honestly.
+## NETSCOPE components
 
-## Current components
-
-| Component | Purpose | Status |
+| Component | Purpose | Current status |
 |---|---|---|
-| NETSCOPE Dark | English LuCI shell, login, menu search and base version | running on the test router; image packaging pending |
-| Traffic / NETSCOPE | devices, conntrack, directions, ports, PCAP sessions | prototype and runtime components available |
-| VPN Quick setup | WG, AWG, VLESS/Xray and Mieru from LuCI | drafts and preflight; plain WG has an isolated watchdog runtime |
-| Recovery | known-good state, backups and return procedure | documented; no image released |
-| IoT monitor | rolling Wi‑Fi, WAN and DNS evidence | available as a standalone tool |
-| Wi‑Fi 7 / MLO Lab | restore the vendor 5G-low + 5G-high topology | model and tests only; no live apply |
+| NETSCOPE UI | English LuCI shell, login, navigation and base version | runs on the test router; theme sources are still being consolidated here |
+| NETSCOPE Traffic | devices, conntrack, directions, ports, counters and controlled PCAP sessions | local prototype works; public packaging is incomplete |
+| VPN Quick setup | prepare WG, AWG, VLESS/Xray and Mieru from LuCI | sources published; plain WG has an isolated watchdog runtime, other modes are prepare-only |
+| IoT monitor | distinguish Wi‑Fi, DHCP, DNS, WAN and cloud failures | read-only tool published |
+| Recovery | backups, known-good baseline and return procedure | runbook published; no recovery image is distributed |
+| Wi‑Fi 7 / MLO Lab | investigate the vendor 5G-low + 5G-high topology | models, render-only helper and tests only; no live apply |
 
-See [firmware/README.md](firmware/README.md) for the source layout and
-[firmware/RELEASE-CHECKLIST.md](firmware/RELEASE-CHECKLIST.md) for release
-gates. The test-only interface is available as the
-[Wi-Fi 7 Lab Figma screen](https://www.figma.com/design/SlXSi90WevQOkB78HuLdFp?node-id=56-318).
+Status labels are literal: **works** means tested on my router, **published**
+means the source is present here, **model** does not prove hardware behavior,
+and **plan** means the runtime is not released.
 
-## IoT network rationale
+## Why IoT is separate
 
-Low-power 2.4 GHz devices intermittently lost internet connectivity on the
-combined network while WAN remained healthy. A speaker was moved to a separate
-2.4 GHz IoT SSID for diagnosis and stability; a vacuum was later added. The
-main LAN should get only the local control paths it needs, and IoT remains
-outside MLO experiments. This is evidence from this client/firmware
-combination, not a claim that the MLO standard itself is broken.
+A voice speaker intermittently reported that it had no internet while the
+router WAN remained alive. A vacuum was later added to the same diagnostic
+segment. These clients therefore use a dedicated 2.4 GHz network, with only
+the required local control allowed from the main LAN.
 
-The sanitized design is documented in [docs/IOT-NETWORK.md](docs/IOT-NETWORK.md).
+The Xiaomi firmware supports Wi‑Fi 7/MLO, but its supported configuration does
+not keep both 5 GHz radio links in one MLD while exposing 2.4 GHz as a separate
+IoT SSID. The stock UI therefore makes the user choose between the unified MLO
+network and band separation that loses the desired MLO topology. This
+constraint—not a lack of Wi‑Fi 7 on stock—is why NETSCOPE treats IoT as a
+separate design problem.
+
+MLO is not presented as the proven root cause. Band steering, the client,
+DHCP/DNS or the cloud service remain possible. The
+[IoT monitor](tools/netscope-iot-monitor) collects evidence; the sanitized
+network design is in [docs/IOT-NETWORK.md](docs/IOT-NETWORK.md).
 
 ## Wi‑Fi 7 / MLO boundary
 
-The Xiaomi firmware can split the external radio into two 5 GHz PHYs and join
-them into one MLD. The current QWRT boot uses the QCN9224 in single-PHY mode.
-Reproducing the vendor topology requires a coherent GPIO, BDF, ART offset,
-CNSS and MLO startup sequence.
+The Xiaomi firmware can expose the external QCN9224 as two 5 GHz PHYs and join
+them into an MLD. The current QWRT boot uses single-PHY mode. Reproducing the
+vendor topology requires a coherent GPIO, BDF, ART offset, CNSS startup order
+and MLO configuration.
 
-The repository now models a no-UART runtime trial as well as the original
-UART-gated hardware transaction. The no-UART model only accepts post-boot RAM
-state: no UCI commit, autostart, boot files, boot environment, MTD or ART
-writes. Ordinary failures roll back in the model; a kernel hang is explicitly
-classified as requiring a local cold power cycle. This reduces persistent
-brick risk but does not prove GPIO electrical safety or RF behavior.
+The repository contains an UART-gated hardware transaction model and a
+theoretical no-UART trial model. The latter only accepts post-boot RAM state:
+no UCI commit, autostart, boot files, boot environment, MTD or ART writes. Both
+models emit zero router commands and always report `live_apply_allowed=false`.
+A kernel hang is explicitly classified as requiring a local power cycle.
 
-The full topology, failure matrix and acceptance gates are in
-[docs/WIFI7-MLO.md](docs/WIFI7-MLO.md). Live activation remains absent.
+See [docs/WIFI7-MLO.md](docs/WIFI7-MLO.md) for the topology, failure matrix and
+future hardware acceptance gates. The UI concept is available
+[in Figma](https://www.figma.com/design/SlXSi90WevQOkB78HuLdFp?node-id=56-318).
 
-## Run the tests
+## Repository layout
+
+```text
+firmware/
+  packages/luci-app-netscope-setup/   LuCI VPN Quick setup
+  packages/netscope-wifi7-lab/        read-only Wi-Fi 7 preflight/renderer
+  profiles/                            target base profile and release gates
+src/netscope_firmware/                 offline transaction/recovery models
+profiles/                              public board constants
+tools/netscope-iot-monitor/            read-only IoT diagnostics
+examples/                              sanitized VPN templates
+docs/                                  architecture, installation, recovery, labs
+tests/                                 product, security and failure-path tests
+```
+
+See [the architecture](docs/ARCHITECTURE.md) and the
+[current roadmap](docs/ROADMAP.md).
+
+## Run the verification suite
 
 ```bash
 python -m pip install -e .
 python -m unittest discover -s tests -v
-python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
+python -m netscope_firmware profiles/be7000-rc06-qwrt-r26.02.02.json
 python tools/check_public.py
 ```
 
-The matrix covers driver, PHY, MLD, LAN, WAN and confirmation failures,
-kernel hang, reboot before confirmation, baseline drift and every forbidden
-persistence path. The public helper still exposes only `status`, `preflight`
-and `render`.
+CI runs the suite on Python 3.10, 3.12 and 3.13 and validates public JavaScript
+and shell files. These checks prove code properties and recovery paths; they
+do not emulate QCN9224 RF, PCIe power sequencing, EHT beacons or a real client
+multi-link association.
 
-## Repository scope
+## Release boundary
 
-- [`firmware`](firmware) — future image profile, LuCI packages and release gates.
-- [`src/be7000_wifi7_lab`](src/be7000_wifi7_lab) — hardware and RAM-only control-flow models.
-- [`tests`](tests) — positive, negative and recovery cases.
-- [`openwrt-package`](openwrt-package) — render-only MLO Lab package.
-- [`docs/WIFI7-MLO.md`](docs/WIFI7-MLO.md) — dedicated Wi‑Fi 7 engineering note.
-- [`docs/IOT-NETWORK.md`](docs/IOT-NETWORK.md) — IoT isolation rationale and diagnostics.
-- [`docs/INSTALL-SSH-XMIR.md`](docs/INSTALL-SSH-XMIR.md) — XMiR/SSH preparation notes.
-- [`docs/RECOVERY.md`](docs/RECOVERY.md) — Russian administrator recovery runbook.
-- [`examples`](examples) — sanitized L2TP/IPsec, VLESS and AmneziaWG templates.
-- [`tools/iot-monitor`](tools/iot-monitor) — rolling evidence collector for IoT faults.
-- [`SECURITY.md`](SECURITY.md) — data that must never be published.
+The first image requires a pinned build base and toolchain, verified NAND/UBI
+layout, clean first boot, a backup slot, power-loss tests and a proven return
+to a known-good image. `sysupgrade -F`, ART writes and calibration data copied
+from another router are not acceptable shortcuts.
 
-## References
+Live credentials, VPN subscriptions, private keys, device MAC addresses,
+backups, ART, EEPROM and vendor firmware blobs are excluded from Git. The MIT
+license only covers original NETSCOPE code and documentation.
 
-- [OpenWrt source and build system](https://openwrt.org/docs/guide-developer/source-code/start)
+## Links
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Status and roadmap](docs/ROADMAP.md)
+- [Release checklist](firmware/RELEASE-CHECKLIST.md)
 - [OpenWrt Xiaomi BE7000 support work](https://github.com/openwrt/openwrt/pull/20604)
-- [Xiaomi Wi‑Fi 7 FAQ](https://www.mi.com/global/support/article/KA-12725/)
-- [NETSCOPE repository](https://github.com/lststrdst/qwrt-be7000-wifi7-lab)
+- [NETSCOPE repository](https://github.com/lststrdst/netscope-firmware)

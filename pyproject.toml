@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "be7000-wifi7-lab"
-version = "0.2.0"
-description = "Fail-closed BE7000 QWRT Wi-Fi 7/MLO state-transition lab"
+name = "netscope-firmware"
+version = "0.3.0"
+description = "NETSCOPE firmware components, safety models and recovery gates for Xiaomi BE7000"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

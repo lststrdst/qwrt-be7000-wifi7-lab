@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_PATH = ROOT / "profiles/be7000-rc06-qwrt-r26.02.02.json"
-CONF_PATH = ROOT / "openwrt-package/files/etc/be7000-wifi7/profile.conf"
+CONF_PATH = ROOT / "firmware/packages/netscope-wifi7-lab/files/etc/netscope/wifi7/profile.conf"
 
 
 def repository_files() -> list[Path]:
@@ -42,13 +42,37 @@ class RepositoryTests(unittest.TestCase):
     def test_russian_readme_is_primary_and_links_english(self) -> None:
         russian = (ROOT / "README.md").read_text(encoding="utf-8")
         english = (ROOT / "README.en.md").read_text(encoding="utf-8")
-        self.assertIn("## Зачем мне это нужно", russian)
+        self.assertIn("## Зачем я это делаю", russian)
         self.assertIn("восстановление", russian)
         self.assertIn("[English](README.en.md)", russian)
         self.assertIn("[Русский](README.md)", english)
-        self.assertIn("## Why I built this", english)
-        self.assertIn("прошивка для Xiaomi BE7000", russian)
-        self.assertIn("firmware for Xiaomi BE7000", english)
+        self.assertIn("## Why I am building it", english)
+        self.assertIn("прошивки для Xiaomi BE7000", russian)
+        self.assertIn("firmware project for Xiaomi BE7000", english)
+
+    def test_netscope_identity_replaces_the_old_lab_project_identity(self) -> None:
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")
+        self.assertIn('name = "netscope-firmware"', pyproject)
+        self.assertIn("name: NETSCOPE verification", workflow)
+        self.assertTrue((ROOT / "src/netscope_firmware").is_dir())
+        self.assertFalse((ROOT / "src/be7000_wifi7_lab").exists())
+        self.assertTrue((ROOT / "firmware/packages/netscope-wifi7-lab/Makefile").is_file())
+        self.assertFalse((ROOT / "openwrt-package").exists())
+
+    def test_public_markdown_relative_links_resolve(self) -> None:
+        broken = []
+        link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+        for path in ROOT.rglob("*.md"):
+            if ".git" in path.parts:
+                continue
+            for target in link_pattern.findall(path.read_text(encoding="utf-8")):
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                clean = target.split("#", 1)[0]
+                if clean and not (path.parent / clean).resolve().exists():
+                    broken.append(f"{path.relative_to(ROOT)} -> {target}")
+        self.assertEqual(broken, [])
 
     def test_wifi7_and_iot_are_documented_as_separate_scopes(self) -> None:
         wifi7 = (ROOT / "docs/WIFI7-MLO.md").read_text(encoding="utf-8")
@@ -60,6 +84,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("голосовая колонка", iot)
         self.assertIn("пылесос", iot)
         self.assertIn("только на 2,4 ГГц", iot)
+        self.assertIn("два 5‑ГГц радиолинка остаются одним MLD", iot)
+        self.assertIn("отдельным IoT SSID", iot)
 
     def test_recovery_runbook_documents_known_safe_state(self) -> None:
         recovery = (ROOT / "docs/RECOVERY.md").read_text(encoding="utf-8")
@@ -117,7 +143,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_openwrt_package_has_no_autostart_hooks(self) -> None:
-        package_files = [str(path.relative_to(ROOT / "openwrt-package")) for path in (ROOT / "openwrt-package").rglob("*") if path.is_file()]
+        package_root = ROOT / "firmware/packages/netscope-wifi7-lab"
+        package_files = [str(path.relative_to(package_root)) for path in package_root.rglob("*") if path.is_file()]
         self.assertFalse(any("init.d" in path or "postinst" in path for path in package_files))
 
     def test_vpn_examples_are_placeholders_and_public_check_passes(self) -> None:
@@ -140,8 +167,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
 
     def test_iot_monitor_is_generic_and_does_not_modify_network(self) -> None:
-        monitor = (ROOT / "tools/iot-monitor/iot-monitor.sh").read_text(encoding="utf-8")
-        example = (ROOT / "tools/iot-monitor/targets.example").read_text(encoding="utf-8")
+        monitor = (ROOT / "tools/netscope-iot-monitor/netscope-iot-monitor.sh").read_text(encoding="utf-8")
+        example = (ROOT / "tools/netscope-iot-monitor/targets.example").read_text(encoding="utf-8")
         self.assertIn("TARGETS_FILE", monitor)
         self.assertIn("logread -f", monitor)
         self.assertIn("wlanconfig", monitor)
@@ -154,12 +181,12 @@ class RepositoryTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("python -m unittest discover -s tests -v", workflow)
-        self.assertIn("sh -n openwrt-package/files/usr/libexec/be7000-wifi7-lab", workflow)
-        self.assertIn("sh -n tools/iot-monitor/iot-monitor.sh", workflow)
+        self.assertIn("sh -n firmware/packages/netscope-wifi7-lab/files/usr/libexec/netscope-wifi7-lab", workflow)
+        self.assertIn("sh -n tools/netscope-iot-monitor/netscope-iot-monitor.sh", workflow)
 
     def test_documented_cli_emits_valid_scenario_report(self) -> None:
         completed = subprocess.run(
-            [sys.executable, "-m", "be7000_wifi7_lab", str(PROFILE_PATH)],
+            [sys.executable, "-m", "netscope_firmware", str(PROFILE_PATH)],
             cwd=ROOT,
             check=True,
             capture_output=True,

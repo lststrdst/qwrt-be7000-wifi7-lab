@@ -1,4 +1,6 @@
-"""Fail-closed state model for BE7000 QWRT Wi-Fi 7 research."""
+"""Offline safety models used by the NETSCOPE firmware project."""
+
+__version__ = "0.3.0"
 
 from .model import RouterState, run_transaction, scenarios
 from .runtime_trial import RuntimeTrialPolicy, no_uart_scenarios, simulate_no_uart_trial
@@ -10,4 +12,5 @@ __all__ = [
     "scenarios",
     "simulate_no_uart_trial",
     "no_uart_scenarios",
+    "__version__",
 ]

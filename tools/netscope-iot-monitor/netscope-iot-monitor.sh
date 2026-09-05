@@ -2,13 +2,13 @@
 
 set -u
 
-BASE=${IOT_MONITOR_BASE:-/mnt/sda1/qwrt-services/iot-monitor}
+BASE=${NETSCOPE_IOT_BASE:-/mnt/sda1/NETSCOPE/iot-monitor}
 LOG_DIR="$BASE/logs"
-TARGETS_FILE=${IOT_MONITOR_TARGETS:-$BASE/targets.conf}
+TARGETS_FILE=${NETSCOPE_IOT_TARGETS:-$BASE/targets.conf}
 PID_FILE="$BASE/iot-monitor.pid"
 EVENT_PID_FILE="$BASE/logread.pid"
-INTERVAL=${IOT_MONITOR_INTERVAL:-15}
-MAX_BYTES=${IOT_MONITOR_MAX_BYTES:-8388608}
+INTERVAL=${NETSCOPE_IOT_INTERVAL:-15}
+MAX_BYTES=${NETSCOPE_IOT_MAX_BYTES:-8388608}
 
 mkdir -p "$LOG_DIR"
 umask 077
@@ -89,29 +89,29 @@ while :; do
 
             if [ -z "$target_ip" ]; then
                 echo 'target_ping=unknown'
-            elif ping -c 1 -W 1 "$target_ip" >/tmp/iot-monitor-target-ping 2>&1; then
+            elif ping -c 1 -W 1 "$target_ip" >/tmp/netscope-iot-target-ping 2>&1; then
                 echo 'target_ping=ok'
-                tail -n 2 /tmp/iot-monitor-target-ping 2>/dev/null || true
+                tail -n 2 /tmp/netscope-iot-target-ping 2>/dev/null || true
             else
                 echo 'target_ping=fail'
-                tail -n 2 /tmp/iot-monitor-target-ping 2>/dev/null || true
+                tail -n 2 /tmp/netscope-iot-target-ping 2>/dev/null || true
             fi
         done < "$TARGETS_FILE"
 
-        if ping -c 1 -W 1 1.1.1.1 >/tmp/iot-monitor-wan-ping 2>&1; then
+        if ping -c 1 -W 1 1.1.1.1 >/tmp/netscope-iot-wan-ping 2>&1; then
             echo 'wan_ping=ok'
         else
             echo 'wan_ping=fail'
         fi
-        tail -n 2 /tmp/iot-monitor-wan-ping 2>/dev/null || true
+        tail -n 2 /tmp/netscope-iot-wan-ping 2>/dev/null || true
 
         if [ $((counter % 4)) -eq 0 ]; then
-            if nslookup example.com 127.0.0.1 >/tmp/iot-monitor-dns 2>&1; then
+            if nslookup example.com 127.0.0.1 >/tmp/netscope-iot-dns 2>&1; then
                 echo 'dns=ok'
             else
                 echo 'dns=fail'
             fi
-            tail -n 6 /tmp/iot-monitor-dns 2>/dev/null || true
+            tail -n 6 /tmp/netscope-iot-dns 2>/dev/null || true
         fi
         echo
     } >> "$LOG_DIR/health.log"

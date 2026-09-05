@@ -9,7 +9,10 @@ from .runtime_trial import no_uart_scenarios
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the BE7000 Wi-Fi 7 control-flow model")
+    parser = argparse.ArgumentParser(
+        prog="python -m netscope_firmware",
+        description="Run NETSCOPE offline safety models for the Xiaomi BE7000 Wi-Fi 7 lab",
+    )
     parser.add_argument("profile", type=Path)
     args = parser.parse_args()
     profile = json.loads(args.profile.read_text(encoding="utf-8"))
