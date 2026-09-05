@@ -22,6 +22,10 @@
 - [ ] Проверить power loss, заполнение/отключение USB, перезапуск служб,
   обновление и возврат на известную рабочую сборку.
 - [ ] Подтвердить UART 1,8 В и аппаратный recovery на тестовом BE7000.
+- [ ] Для Wi-Fi 7/MLO отдельно пройти runtime-only матрицу: zero persistence,
+  baseline fingerprints, watchdog rollback, confirm timeout, kernel-hang с
+  ручным power cycle и cold-boot возврат в single-PHY. До этого live apply
+  отсутствует даже в лабораторной сборке.
 - [ ] Выпустить manifest с SHA-256, размерами, базой, changelog, ограничениями
   и отдельными инструкциями для stock → NETSCOPE и NETSCOPE → NETSCOPE.
 

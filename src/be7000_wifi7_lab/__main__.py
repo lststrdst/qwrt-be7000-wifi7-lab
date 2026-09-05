@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .model import scenarios
+from .runtime_trial import no_uart_scenarios
 
 
 def main() -> int:
@@ -12,7 +13,9 @@ def main() -> int:
     parser.add_argument("profile", type=Path)
     args = parser.parse_args()
     profile = json.loads(args.profile.read_text(encoding="utf-8"))
-    print(json.dumps(scenarios(profile), indent=2))
+    report = scenarios(profile)
+    report["no_uart_runtime_trial"] = no_uart_scenarios(profile)
+    print(json.dumps(report, indent=2))
     return 0
 
 

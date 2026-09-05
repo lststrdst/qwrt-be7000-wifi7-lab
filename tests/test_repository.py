@@ -47,6 +47,19 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("[English](README.en.md)", russian)
         self.assertIn("[Русский](README.md)", english)
         self.assertIn("## Why I built this", english)
+        self.assertIn("прошивка для Xiaomi BE7000", russian)
+        self.assertIn("firmware for Xiaomi BE7000", english)
+
+    def test_wifi7_and_iot_are_documented_as_separate_scopes(self) -> None:
+        wifi7 = (ROOT / "docs/WIFI7-MLO.md").read_text(encoding="utf-8")
+        iot = (ROOT / "docs/IOT-NETWORK.md").read_text(encoding="utf-8")
+        self.assertIn("без UART", wifi7)
+        self.assertIn("только в `/tmp`/RAM", wifi7)
+        self.assertIn("kernel hang", wifi7)
+        self.assertIn("live_apply_allowed=false", wifi7)
+        self.assertIn("голосовая колонка", iot)
+        self.assertIn("пылесос", iot)
+        self.assertIn("только на 2,4 ГГц", iot)
 
     def test_recovery_runbook_documents_known_safe_state(self) -> None:
         recovery = (ROOT / "docs/RECOVERY.md").read_text(encoding="utf-8")

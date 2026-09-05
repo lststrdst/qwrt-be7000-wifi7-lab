@@ -1,120 +1,111 @@
-# NETSCOPE — firmware development for Xiaomi BE7000, based on QWRT
+# NETSCOPE — firmware for Xiaomi BE7000, based on QWRT
 
 [Русский](README.md) | **English**
 
 [![Tests](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/qwrt-be7000-wifi7-lab/actions/workflows/tests.yml)
 
-I am developing NETSCOPE for Xiaomi BE7000 (RC06), based on QWRT R26.02.02 /
-QSDK 12.5: a router UI, VPN Quick setup, network diagnostics and recovery.
-The original Wi-Fi 7/MLO lab and sanitized network examples remain here.
+I am developing NETSCOPE as a firmware project for Xiaomi BE7000 (RC06),
+based on QWRT R26.02.02 / QSDK 12.5. The goal is a coherent home gateway:
+an English LuCI shell, network visibility, guarded VPN setup, documented
+recovery and an explicitly experimental Wi‑Fi 7/MLO lab.
 
-The new [firmware directory](firmware) contains a Lua LuCI wizard for
-WireGuard, AmneziaWG v1, VLESS/Xray and Mieru. It creates private configuration
-drafts only; automatic activation, routing and failover are not implemented.
-The component was exercised on QWRT, but a compatible SDK build and complete
-flashable image are still pending. The main documentation is in Russian;
-see the [release gates](firmware/RELEASE-CHECKLIST.md) and
-[SSH/XMiR preparation guide](docs/INSTALL-SSH-XMIR.md).
+NETSCOPE keeps its base visible as `Based on QWRT` and preserves the original
+QWRT attribution. It is not an official QWRT project.
 
-> This repository is **not an official QWRT source fork**, a ready-to-flash
-> firmware image, or a one-click Wi-Fi 7 enabler.
+> There is no public flashable NETSCOPE image yet. This repository contains
+> component sources, tests, sanitized examples and release gates. A firmware
+> image will only be published after the build base, backup slot and recovery
+> path are reproducible.
 
 ## Why I built this
 
-I use the BE7000 as a real home gateway, not as a disposable test board. The
-stock Xiaomi firmware can expose three radios — 2.4 GHz, 5 GHz low and 5 GHz
-high — and combine the two 5 GHz links into one MLD. QWRT R26.02.02 contains
-substantial EHT/MLO machinery, but its default boot state exposes only two PHYs
-and loads the external QCN9224 in single-PHY mode.
+The BE7000 is my primary home gateway. It carries direct internet traffic,
+remote access, IoT devices, an office tunnel and selective routing. QWRT is the
+low-level base I need, but daily operation benefits from safer transactions,
+one consistent UI and diagnostics that do not require ad-hoc shell commands.
 
-The tempting solution is to copy a few forum commands into an init script.
-That is also an easy way to lose every management path to the router. I built
-this project to turn that experiment into a reviewable transaction with exact
-inputs, explicit gates, negative tests and a defined rollback state.
+The project follows four rules:
 
-## What is known
+- keep the original QWRT functionality reachable;
+- give every network change a preflight, isolated scope and rollback path;
+- keep live credentials and device-specific data out of Git;
+- keep experimental features off by default and label them honestly.
 
-The vendor control flow recovered from a Xiaomi BE7000 RC06 firmware image uses
-the following state:
+## Current components
 
-| State | GPIO 453 | GPIO 454 | ART offset | CNSS BDF | MLO |
-|---|---:|---:|---:|---:|---:|
-| Split / three PHY | 1 | 0 | `0x33000` | `0x1008` | enabled, mask 2 |
-| Single / rollback | 0 | 1 | `0x65000` | `0x2` | disabled |
+| Component | Purpose | Status |
+|---|---|---|
+| NETSCOPE Dark | English LuCI shell, login, menu search and base version | running on the test router; image packaging pending |
+| Traffic / NETSCOPE | devices, conntrack, directions, ports, PCAP sessions | prototype and runtime components available |
+| VPN Quick setup | WG, AWG, VLESS/Xray and Mieru from LuCI | drafts and preflight; plain WG has an isolated watchdog runtime |
+| Recovery | known-good state, backups and return procedure | documented; no image released |
+| IoT monitor | rolling Wi‑Fi, WAN and DNS evidence | available as a standalone tool |
+| Wi‑Fi 7 / MLO Lab | restore the vendor 5G-low + 5G-high topology | model and tests only; no live apply |
 
-Both calibration slices are 184,320 bytes. In split mode, the target topology
-is 5 GHz low at 160 MHz plus 5 GHz high at 80 MHz, joined as `5g + 5gh` under a
-single MLD. This is not a 320 MHz or 6 GHz implementation.
+See [firmware/README.md](firmware/README.md) for the source layout and
+[firmware/RELEASE-CHECKLIST.md](firmware/RELEASE-CHECKLIST.md) for release
+gates. The test-only interface is available as the
+[Wi-Fi 7 Lab Figma screen](https://www.figma.com/design/SlXSi90WevQOkB78HuLdFp?node-id=56-318).
 
-The repository records the behavior, hashes locally supplied evidence during
-private testing, and models state transitions. It does not redistribute vendor
-firmware, extracted scripts, board-data files or device calibration material.
+## IoT network rationale
 
-## Current status
+Low-power 2.4 GHz devices intermittently lost internet connectivity on the
+combined network while WAN remained healthy. A speaker was moved to a separate
+2.4 GHz IoT SSID for diagnosis and stability; a vacuum was later added. The
+main LAN should get only the local control paths it needs, and IoT remains
+outside MLO experiments. This is evidence from this client/firmware
+combination, not a claim that the MLO standard itself is broken.
 
-- Exact vendor split and rollback constants documented.
-- Deterministic state-machine model with success, block and rollback cases.
-- CI tests require missing UART/electrical confirmation to fail closed.
-- Wrong calibration and failed health checks restore the single-PHY model.
-- No live `insmod`, GPIO writes, Wi-Fi reload, MTD writes or boot-variable
-  changes are implemented.
+The sanitized design is documented in [docs/IOT-NETWORK.md](docs/IOT-NETWORK.md).
 
-The private hardware-specific lab completed 39 checks and a real QWRT
-`opkg --offline-root` test without changing the live router. That result is
-evidence for the packaging and control flow, not proof that RF/MLO works.
+## Wi‑Fi 7 / MLO boundary
 
-## Safety boundary
+The Xiaomi firmware can split the external radio into two 5 GHz PHYs and join
+them into one MLD. The current QWRT boot uses the QCN9224 in single-PHY mode.
+Reproducing the vendor topology requires a coherent GPIO, BDF, ART offset,
+CNSS and MLO startup sequence.
 
-A virtual machine cannot emulate the BE7000's QCN9224 RF path, PCIe power
-sequencing, board GPIO electrical behavior, EHT beaconing or client
-association. A real hardware probe therefore requires:
+The repository now models a no-UART runtime trial as well as the original
+UART-gated hardware transaction. The no-UART model only accepts post-boot RAM
+state: no UCI commit, autostart, boot files, boot environment, MTD or ART
+writes. Ordinary failures roll back in the model; a kernel hang is explicitly
+classified as requiring a local cold power cycle. This reduces persistent
+brick risk but does not prove GPIO electrical safety or RF behavior.
 
-1. A working 1.8 V UART console.
-2. Verified backups of ART, boot metadata and the active configuration.
-3. A RAM-first experiment with no autostart.
-4. An out-of-band watchdog that restores the known single-PHY state.
-5. A Wi-Fi 7 client capable of the required 5 GHz low + high MLO combination.
+The full topology, failure matrix and acceptance gates are in
+[docs/WIFI7-MLO.md](docs/WIFI7-MLO.md). Live activation remains absent.
 
-Until those gates pass, this project intentionally stops before activation.
-
-## Run the model
+## Run the tests
 
 ```bash
 python -m pip install -e .
 python -m unittest discover -s tests -v
 python -m be7000_wifi7_lab profiles/be7000-rc06-qwrt-r26.02.02.json
-```
-
-## Repository scope
-
-- [`src/be7000_wifi7_lab`](src/be7000_wifi7_lab) — pure state-transition model.
-- [`profiles`](profiles) — non-secret public constants and safety gates.
-- [`tests`](tests) — block, rollback and mocked-success cases.
-- [`openwrt-package`](openwrt-package) — render-only OpenWrt package source.
-- [`tools/iot-monitor`](tools/iot-monitor) — rolling Wi-Fi, WAN and DNS monitor for IoT devices.
-- [`examples`](examples) — sanitized L2TP/IPsec, VLESS/Reality and AmneziaWG templates.
-- [`tools/check_public.py`](tools/check_public.py) — pre-publication secret and artifact check.
-- [`docs/STOCK_SEQUENCE.md`](docs/STOCK_SEQUENCE.md) — evidence summary.
-- [`docs/SAFETY.md`](docs/SAFETY.md) — rules for a future hardware stage.
-- [`docs/RECOVERY.md`](docs/RECOVERY.md) — Russian recovery runbook for administrators.
-- [`SECURITY.md`](SECURITY.md) — material that must stay outside the repository.
-
-## Before publishing
-
-I keep live configurations outside the repository and run both checks before
-publishing a change:
-
-```bash
-python -m unittest discover -s tests -v
 python tools/check_public.py
 ```
 
-The examples use documentation-only addresses and `REPLACE_*` placeholders.
-They are intentionally unusable until adapted to a specific network.
+The matrix covers driver, PHY, MLD, LAN, WAN and confirmation failures,
+kernel hang, reboot before confirmation, baseline drift and every forbidden
+persistence path. The public helper still exposes only `status`, `preflight`
+and `render`.
+
+## Repository scope
+
+- [`firmware`](firmware) — future image profile, LuCI packages and release gates.
+- [`src/be7000_wifi7_lab`](src/be7000_wifi7_lab) — hardware and RAM-only control-flow models.
+- [`tests`](tests) — positive, negative and recovery cases.
+- [`openwrt-package`](openwrt-package) — render-only MLO Lab package.
+- [`docs/WIFI7-MLO.md`](docs/WIFI7-MLO.md) — dedicated Wi‑Fi 7 engineering note.
+- [`docs/IOT-NETWORK.md`](docs/IOT-NETWORK.md) — IoT isolation rationale and diagnostics.
+- [`docs/INSTALL-SSH-XMIR.md`](docs/INSTALL-SSH-XMIR.md) — XMiR/SSH preparation notes.
+- [`docs/RECOVERY.md`](docs/RECOVERY.md) — Russian administrator recovery runbook.
+- [`examples`](examples) — sanitized L2TP/IPsec, VLESS and AmneziaWG templates.
+- [`tools/iot-monitor`](tools/iot-monitor) — rolling evidence collector for IoT faults.
+- [`SECURITY.md`](SECURITY.md) — data that must never be published.
 
 ## References
 
 - [OpenWrt source and build system](https://openwrt.org/docs/guide-developer/source-code/start)
-- [OpenWrt Xiaomi BE7000 support pull request](https://github.com/openwrt/openwrt/pull/20604)
-- [Xiaomi Wi-Fi 7 FAQ](https://www.mi.com/global/support/article/KA-12725/)
-- [BE7000 QWRT R26.02.02 community thread](https://4pda.to/forum/index.php?showtopic=1070166&view=findpost&p=138861971)
+- [OpenWrt Xiaomi BE7000 support work](https://github.com/openwrt/openwrt/pull/20604)
+- [Xiaomi Wi‑Fi 7 FAQ](https://www.mi.com/global/support/article/KA-12725/)
+- [NETSCOPE repository](https://github.com/lststrdst/qwrt-be7000-wifi7-lab)
