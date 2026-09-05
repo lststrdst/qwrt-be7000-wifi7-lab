@@ -3,34 +3,23 @@
 ## Опубликовано и проверяется CI
 
 - исходник LuCI-приложения VPN Quick setup;
-- транзакционный runtime обычного WireGuard с подтверждением и watchdog;
-- prepare-only drafts для AmneziaWG, VLESS/Xray и Mieru;
+- протокольно-изолированные runtimes WG, AWG, VLESS/Xray и Mieru с
+  подтверждением, health check и watchdog rollback;
+- русская тема NETSCOPE, Traffic/Devices, USB PCAP и опциональный HTTPS lab;
+- воспроизводимый installable overlay для точной QWRT R26.2.2;
 - read-only IoT monitor с кольцевыми журналами на USB;
 - модели Wi‑Fi 7/MLO и негативные recovery tests;
 - render-only пакет `netscope-wifi7-lab`;
 - обезличенные VPN-примеры, recovery и SSH/XMiR документация;
 - проверка публичного дерева на секреты и vendor/device artifacts.
 
-## Работает на тестовом роутере, но ещё не упаковано здесь
-
-- английская оболочка и вход NETSCOPE;
-- встроенная страница Traffic/Devices на основе conntrack;
-- ранний Packet Lab и управление локальными capture-сессиями;
-- отображение версии `NETSCOPE (QWRT base)` в LuCI.
-
-До публикации соответствующих пакетов эти функции не считаются частью
-воспроизводимого релиза.
-
 ## Ближайшие задачи
 
-1. Перенести тему/навигацию в `luci-theme-netscope` без изменения штатных
-   LuCI routes.
-2. Перенести Traffic и Packet Lab в отдельный `luci-app-netscope` с backend,
-   лимитами USB и fail-safe recovery.
-3. Добавить интеграционные тесты API, nftables/iptables cleanup и USB failure.
-4. Доделать отдельные runtime-контракты AWG и VLESS/Xray; Mieru оставить
-   disabled, пока нет серверного профиля и health checks.
-5. Закрепить воспроизводимую базу сборки, toolchain и package manifest.
+1. Добавить интеграционные тесты API, iptables cleanup и USB failure.
+2. Упаковать документированный ARM64 Docker runtime для HTTPS lab без vendor blobs.
+3. Добавить policy-routing слой поверх loopback VLESS/Mieru с отдельным rollback.
+4. Проверить AWG и Mieru на реальных внешних серверах; без бинарника их preflight заблокирован.
+5. Закрепить воспроизводимую QWRT/OpenWrt базу, toolchain и package manifest.
 6. Проверить чистый first boot, обновление и возврат на известную рабочую
    сборку на отдельном стенде.
 

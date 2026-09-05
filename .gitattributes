@@ -16,3 +16,5 @@ firmware/packages/netscope-wifi7-lab/files/usr/libexec/* text eol=lf
 tools/netscope-iot-monitor/* text eol=lf
 examples/**/*.example text eol=lf
 examples/**/*.sh text eol=lf
+firmware/**/files/usr/libexec/* text eol=lf
+firmware/**/files/etc/init.d/* text eol=lf

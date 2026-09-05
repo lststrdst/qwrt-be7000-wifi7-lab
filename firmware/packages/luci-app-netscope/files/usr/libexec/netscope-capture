@@ -1,0 +1,269 @@
+#!/usr/bin/lua
+-- procd supervises this small control loop. Boot/restart always recovers to OFF.
+local C=require'luci.model.netscope_capture';local D=require'luci.model.netscope_capture_decode'
+local fs=require'nixio.fs';local n=require'nixio';local j=require'luci.jsonc'
+local P=require'luci.model.netscope_capture_proxy'
+local TCPDUMP=fs.access('/usr/libexec/netscope-tcpdump','x') and '/usr/libexec/netscope-tcpdump'
+    or fs.access('/usr/sbin/tcpdump','x') and '/usr/sbin/tcpdump'
+    or fs.access('/usr/bin/tcpdump','x') and '/usr/bin/tcpdump'
+    or '/usr/libexec/netscope-tcpdump'
+local function runline(cmd) local f=io.popen(cmd);if not f then return '' end;local v=f:read(8192) or '';f:close();return v end
+local function identity(pid)
+    pid=tonumber(pid);if not pid or pid<2 then return nil end
+    local cmd=C.read('/proc/'..pid..'/cmdline',4096) or '';local stat=C.read('/proc/'..pid..'/stat',4096) or ''
+    local rest=stat:match('^%d+ %b() (.*)');local cols={};for v in (rest or ''):gmatch('%S+') do cols[#cols+1]=v end
+    local cwd=fs.readlink('/proc/'..pid..'/cwd') or ''
+    if not cmd:find(TCPDUMP,1,true) or cwd:sub(1,#C.ROOT+10)~=C.ROOT..'/sessions/' or cols[1]=='Z' then return nil end
+    return cols[20]
+end
+local function kill_writer(p)
+    if p and p.pid and p.identity and identity(p.pid)==p.identity then
+        n.kill(p.pid,15)
+        for _=1,10 do n.waitpid(p.pid,'nohang');if not identity(p.pid) then return end;n.nanosleep(0,100000000) end
+        if identity(p.pid)==p.identity then n.kill(p.pid,9);n.waitpid(p.pid) end
+    end
+end
+if arg[1]=='doctor' then
+    local storage=C.storage(true);local docker=runline('command -v docker 2>/dev/null'):gsub('%s+$','')
+    local out={title='NETSCOPE Capture Doctor',version=C.VERSION,kernel=runline('uname -r'):gsub('%s+$',''),architecture=runline('uname -m'):gsub('%s+$',''),
+        platform=runline('cat /etc/openwrt_release | sed -n "s/^DISTRIB_DESCRIPTION=//p"'):gsub('%s+$',''),
+        lan=fs.access('/sys/class/net/br-lan') and 'br-lan' or 'unavailable',wan=runline("ip route show default | awk '{print $5}'"):gsub('%s+$',''),
+        firewall=runline('iptables --version 2>/dev/null'):gsub('%s+$',''),conntrack=fs.access('/proc/net/nf_conntrack') or false,
+        tcpdump=runline(TCPDUMP..' --version 2>&1'):gsub('%s+$',''),usb=storage,
+        docker=P.preflight(),mitmproxy={image=P.IMAGE},ca=P.ca(),capture=C.status(),
+        own_firewall_rules=runline("iptables-save 2>/dev/null | grep -E 'NETSCOPE-(CAPTURE|HTTPS|QUIC)' | wc -l"),
+        quic_rule='session scoped, optional; own rules removed on OFF',offload={ecm=fs.access('/sys/module/ecm') or false,nss=fs.access('/sys/module/qca_nss_ppe') or false,changed=false},
+        visibility='Passive br-lan packets may omit offloaded/switched traffic. HTTPS inspection is separate, optional, and requires a trusted CA on selected administered devices.'}
+    print(j.stringify(out));os.exit(0)
+elseif arg[1]=='status' then print(j.stringify(C.status()));os.exit(0)
+elseif arg[1]~='daemon' then io.stderr:write('Usage: netscope-capture doctor|status|daemon\n');os.exit(2) end
+
+n.umask('077');C.mkdir(C.RUN)
+local lock=n.open(C.RUN..'/supervisor.lock','w','600');assert(lock and lock:lock('tlock'),'Another supervisor is active')
+-- QWRT nixio supports native signal dispositions, not Lua callbacks. The small
+-- shell supervisor catches TERM/INT/HUP and writes shutdown; parent loss is also
+-- detected, so killing the shell cannot leave a writer behind.
+n.signal(15,'ign');n.signal(2,'ign');n.signal(1,'ign')
+local parent=n.getppid();fs.unlink(C.RUN..'/shutdown')
+local state={state='OFF',active=false};local session,writer,decoder,path,storageid
+local readers,journals={},{};local counters={dns=0,http=0,tls=0,packets=0,decoder_omitted=0};local seq=0
+local dns_cache,tls_cache,first_seen={},{},{}
+local decode_files
+local proxy_lan,proxy_deadline
+local function persist()
+    state.heartbeat=os.time();state.counters=counters;state.command_id=state.command_id
+    C.atomic(C.RUN..'/status.json',state)
+    local st=C.storage()
+    if session and st.mounted and st.identity==storageid and not st.error then
+        session.state=state.state;session.counters=counters;session.updated_at=os.time();session.written=state.written or 0
+        session.https_counters=state.https_counters;session.error=state.error
+        C.atomic(path..'/session.json',session)
+    end
+end
+local function finish(reason)
+    if state.https or state.proxy_starting then
+        local clean,why=P.stop();if not clean then state.error=why;state.state='CLEANUP_ERROR';persist();return false end
+    end
+    state.https=false;state.proxy_starting=false;proxy_deadline=nil;proxy_lan=nil
+    kill_writer(writer);writer=nil;fs.unlink(C.RUN..'/writer.json')
+    if decoder and C.storage().identity==storageid then
+        -- tcpdump flushes its final packets on TERM. Drain a bounded tail before
+        -- finalising, then report any remaining backlog rather than hiding it.
+        if decode_files then
+            for _=1,4 do
+                local ok=pcall(decode_files)
+                if not ok then state.decoder_error='Final decoder pass failed';break end
+                if (state.decoder_backlog or 0)==0 then break end
+            end
+        end
+        decoder:expire(os.time()+60);counters.decoder_omitted=decoder.omitted
+    end
+    state.active=false;state.state=reason or 'STOPPED'
+    if session then session.ended_at=os.time() end
+    pcall(persist)
+    if session and C.storage().identity==storageid then
+        -- Sync only this session's files, not every service on the USB.
+        for _,entry in ipairs(C.files(session.id) or {}) do local fd=n.open(path..'/pcap/'..entry.name,'r');if fd then fd:sync();fd:close() end end
+        local fd=n.open(path..'/session.json','r');if fd then fd:sync();fd:close() end
+    end
+    session=nil;decoder=nil;path=nil;readers={};journals={}
+end
+local function recover()
+    assert(P.stop(),'NETSCOPE redirect recovery failed')
+    kill_writer(C.json(C.RUN..'/writer.json'));fs.unlink(C.RUN..'/writer.json');fs.unlink(C.RUN..'/command.json');fs.rmdir(C.RUN..'/api-lock')
+    local st=C.storage()
+    if st.mounted and not st.error then
+        for id in fs.dir(C.ROOT..'/sessions') or function() end do
+            local p=C.session(id)
+            if p then local s=C.json(p..'/session.json');if s and s.owner=='NETSCOPE' and (s.state=='RUNNING' or s.state=='STARTING') then s.state='INTERRUPTED';s.ended_at=os.time();C.atomic(p..'/session.json',s) end end
+        end
+    end
+    persist()
+end
+P.pulse=persist
+recover()
+local function emit(kind,event)
+    if not session or not session.settings[kind=='tls' and 'metadata' or kind] then return end
+    seq=seq+1;event.id=seq;counters[kind]=counters[kind]+1
+    if kind=='dns' and event.response then
+        for _,answer in ipairs(event.answers or {}) do
+            if answer.type==1 or answer.type==28 then
+                dns_cache[#dns_cache+1]={device=event.device,ip=answer.value,query=event.query,timestamp=event.timestamp,expires=event.timestamp+math.min(answer.ttl or 0,300)}
+                if #dns_cache>512 then table.remove(dns_cache,1) end
+            end
+        end
+    elseif kind=='tls' then tls_cache[#tls_cache+1]=event;if #tls_cache>256 then table.remove(tls_cache,1) end end
+    local dir=path..(kind=='dns' and '/dns' or '/flows')
+    if kind=='http' then
+        local slot=seq%512;local detail=dir..'/http-'..string.format('%04d',slot)..'.json'
+        local old=C.json(detail)
+        if old then for _,side in ipairs({'request','response'}) do local b=old[side] and old[side].body_ref;if b and b:match('^body%-%d+%-[a-z]+%.bin$') and C.safe(dir..'/'..b) then fs.unlink(dir..'/'..b) end end end
+        for _,side in ipairs({'request','response'}) do
+            local msg=event[side]
+            if msg then
+                local ref='body-'..seq..'-'..side..'.bin';local f=assert(io.open(dir..'/'..ref,'wb'));local b=msg.body or '';assert(f:write(b));assert(f:close());fs.chmod(dir..'/'..ref,'600')
+                msg.body_ref=ref;msg.body_captured=#b;msg.body=nil
+                msg.sha256=runline("sha256sum '"..dir..'/'..ref.."'"):match('^(%x+)')
+            end
+        end
+        C.atomic(detail,event)
+        event={id=seq,timestamp=event.timestamp,source=event.source,destination=event.destination,dport=event.dport,method=event.request.method,
+            host=event.request.host,status=event.response and event.response.status,size=event.response and event.response.size,inspection='PLAIN HTTP'}
+    end
+    local journal=journals[kind] or {part=1,size=0};journals[kind]=journal
+    local line=j.stringify(event)..'\n'
+    if journal.size+#line>262144 then
+        journal.part=journal.part+1;journal.size=0
+        if journal.part>16 then fs.unlink(dir..'/'..kind..'-'..string.format('%08d',journal.part-16)..'.jsonl') end
+    end
+    local file=dir..'/'..kind..'-'..string.format('%08d',journal.part)..'.jsonl'
+    assert(C.safe(file));local f=assert(io.open(file,'ab'));assert(f:write(line));assert(f:close());journal.size=journal.size+#line
+end
+local function start(settings)
+    local valid,err=C.validate(settings);if not valid then return nil,err end
+    local st=C.storage(true);if st.error or st.free<128000000 then return nil,st.error or 'Insufficient USB space' end
+    if not fs.access(TCPDUMP,'x') or not fs.access('/sys/class/net/br-lan') then return nil,'tcpdump or br-lan unavailable' end
+    C.mkdir(C.ROOT);C.mkdir(C.ROOT..'/sessions');C.mkdir(C.ROOT..'/config')
+    local rnd=assert(io.open('/dev/urandom','rb'));local bytes=rnd:read(5);rnd:close();local suffix=bytes:gsub('.',function(c)return string.format('%02x',c:byte())end)
+    local id=os.date('!%Y%m%dT%H%M%S')..'-'..suffix;path=C.mkdir(C.ROOT..'/sessions/'..id)
+    for _,d in ipairs({'pcap','flows','dns','logs'}) do C.mkdir(path..'/'..d) end
+    storageid=st.identity;session={id=id,owner='NETSCOPE',version=C.VERSION,started_at=os.time(),settings=valid,state='STARTING',visibility=C.status().visibility}
+    state={state='STARTING',active=true,session=id,started_at=session.started_at,command_id=state.command_id,https=false,storage_identity=storageid}
+    counters={dns=0,http=0,tls=0,packets=0,decoder_omitted=0};seq=0;readers={};journals={};dns_cache={};tls_cache={};first_seen={};decoder=D.new(emit)
+    C.atomic(C.ROOT..'/config/last-session.json',{id=id});C.atomic(path..'/session.json',session)
+    local count=math.floor((valid.max_mb-192)/valid.chunk_mb)
+    -- With -C/-W tcpdump rotates only its fixed PCAP slots. 192 MB reserves
+    -- space for bounded journals/bodies. -C uses decimal MB, not MiB.
+    local bpf='ip or ip6'
+    if valid.scope=='selected' then local hosts={};for _,ip in ipairs(valid.devices) do hosts[#hosts+1]='host '..ip end;bpf='('..bpf..') and ('..table.concat(hosts,' or ')..')' end
+    local pid=n.fork();assert(pid,'fork failed')
+    if pid==0 then
+        local null=n.open('/dev/null','r');local log=n.open(path..'/logs/tcpdump.log','w','600')
+        n.dup(null,n.stdin);n.dup(log,n.stdout);n.dup(log,n.stderr)
+        -- A pinned working directory stays on the detached USB mount. Rotation
+        -- cannot fall through to rootfs if the mount disappears between checks.
+        if not n.chdir(path..'/pcap') then os.exit(126) end
+        n.exec(TCPDUMP,'-i','br-lan','-nn','-s',valid.pcap and '65535' or '2048','-B','2048','-U','-C',tostring(valid.chunk_mb),'-W',tostring(count),'-w','capture.pcap',bpf)
+        os.exit(127)
+    end
+    for _=1,10 do n.nanosleep(0,100000000);local value=identity(pid);if value then writer={pid=pid,identity=value};break end end
+    if not writer then n.waitpid(pid,'nohang');return nil,'tcpdump failed to start' end
+    C.atomic(C.RUN..'/writer.json',writer);n.nanosleep(0,200000000)
+    if not identity(pid) then return nil,'tcpdump exited at startup' end
+    state.state='RUNNING'
+    if valid.https then
+        state.state='STARTING';state.proxy_starting=true;persist()
+        proxy_lan=P.start(session,path);proxy_deadline=os.time()+20
+    end
+    return true
+end
+local function le32(s,p,le)
+    if not le then return D.u32(s,p) end
+    local a,b,c,d=s:byte(p,p+3);if d then return a+b*256+c*65536+d*16777216 end
+end
+decode_files=function()
+    local files=C.files(session.id) or {};local budget=2097152;local total=0;local lag=0
+    for _,entry in ipairs(files) do total=total+entry.size end
+    for _,entry in ipairs(files) do
+        local file=path..'/pcap/'..entry.name;local f=io.open(file,'rb')
+        if f then
+            local header=f:read(40)
+            if header and #header>=40 then
+                local reader=readers[entry.name]
+                if not reader or reader.header~=header or entry.size<reader.pos then
+                    if reader and reader.pos<reader.size then state.decoder_ring_loss=true end
+                    reader={pos=24,header=header};readers[entry.name]=reader
+                end
+                reader.size=entry.size;local magic=header:sub(1,4);local le=magic=='\212\195\178\161' or magic=='\77\60\178\161'
+                local scale=(magic=='\77\60\178\161' or magic=='\161\178\60\77') and 1e9 or 1e6
+                if le or magic=='\161\178\195\212' or magic=='\161\178\60\77' then
+                    local link=le32(header,21,le);f:seek('set',reader.pos)
+                    while budget>0 do
+                        local h=f:read(16);if not h or #h<16 then break end
+                        local length=le32(h,9,le);if not length or length>65535 then state.decoder_error='Invalid/truncated PCAP record';break end
+                        local payload=f:read(length);if not payload or #payload<length then break end
+                        budget=budget-length-16;reader.pos=reader.pos+16+length;counters.packets=counters.packets+1
+                        local packet=D.packet(payload,link,le32(h,1,le)+le32(h,5,le)/scale);if packet then decoder:packet(packet) end
+                    end
+                end
+                lag=lag+math.max(0,entry.size-reader.pos)
+            end
+            f:close()
+        end
+    end
+    state.written=total;state.decoder_backlog=lag;counters.decoder_omitted=decoder.omitted
+end
+local tick=0;local last_preflight=0
+while not fs.access(C.RUN..'/shutdown') and n.getppid()==parent do
+    local ok=pcall(function()
+        if not state.active and os.time()-last_preflight>30 then
+            C.atomic(C.RUN..'/proxy-preflight.json',P.preflight());last_preflight=os.time()
+        end
+        local cmd=C.json(C.RUN..'/command.json')
+        if cmd then
+            fs.unlink(C.RUN..'/command.json');state.command_id=cmd.id
+            if cmd.action=='stop' then finish('STOPPED')
+            elseif cmd.action=='start' and not state.active then
+                local success,err=start(cmd.settings)
+                if not success then state.error=err;finish('FAILED') end
+                state.command_id=cmd.id
+            end
+        end
+        if state.active then
+            local st=C.storage()
+            if st.error or st.identity~=storageid or st.free<64000000 then state.error=st.error or 'USB removed/changed or less than 64 MB free';finish('STORAGE_ERROR')
+            elseif not writer or identity(writer.pid)~=writer.identity then state.error='tcpdump stopped unexpectedly';finish('FAILED')
+            else
+                if state.proxy_starting or state.https then
+                    local healthy,health=P.healthy(path,proxy_lan)
+                    if health then state.https_counters=health end
+                    if state.proxy_starting and healthy then
+                        local installed=pcall(P.rules,session.settings)
+                        if not installed then local clean,why=P.stop();state.https=not clean;state.error=why or 'HTTPS rules could not be installed; passive capture continues';state.state=clean and 'DEGRADED' or 'CLEANUP_ERROR';state.proxy_starting=false
+                        else state.proxy_starting=false;state.https=true;state.state='RUNNING' end
+                    elseif (state.https and not healthy) or (state.proxy_starting and os.time()>proxy_deadline) then
+                        local clean,why=P.stop();state.https=not clean;state.proxy_starting=false
+                        state.state=clean and 'DEGRADED' or 'CLEANUP_ERROR';state.error=why or 'HTTPS proxy failed health check; redirect removed, passive capture continues'
+                    end
+                end
+                decode_files();decoder:expire(os.time());tick=tick+1
+                if tick%5==0 and session.settings.metadata then
+                    C.atomic(path..'/flows/enrichment.json',{dns=dns_cache,tls=tls_cache})
+                    local snapshot=require('luci.model.netscope').snapshot();snapshot.lab=nil
+                    if session.settings.scope=='selected' then
+                        local allow={};for _,ip in ipairs(session.settings.devices) do allow[ip]=true end
+                        local flows={};for _,flow in ipairs(snapshot.flows) do if allow[flow.source] or allow[flow.destination] then flows[#flows+1]=flow end end;snapshot.flows=flows
+                    end
+                    if #snapshot.flows>1000 then for i=#snapshot.flows,1001,-1 do snapshot.flows[i]=nil end;snapshot.limited=true end
+                    local seen={};for _,flow in ipairs(snapshot.flows) do flow.first_observed=first_seen[flow.id] or os.time();flow.last_observed=os.time();seen[flow.id]=flow.first_observed end;first_seen=seen
+                    snapshot.captured_at=os.time();C.atomic(path..'/flows/connections.json',snapshot)
+                    session.devices=#snapshot.devices;session.connections=#snapshot.flows
+                end
+            end
+        end
+        persist()
+    end)
+    if not ok then state.error='Capture I/O or decoder failure; writer stopped';finish('FAILED');pcall(persist) end
+    n.nanosleep(1,0)
+end
+finish('INTERRUPTED');state.state='OFF';pcall(persist)

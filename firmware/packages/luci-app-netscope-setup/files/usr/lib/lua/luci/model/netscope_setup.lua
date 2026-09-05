@@ -1,42 +1,45 @@
--- Private, on-device configuration preparation. No network/service changes.
-local M={VERSION='0.4.0'}
+-- Private, on-device configuration preparation and explicit transactional activation.
+local M={VERSION='0.5.0'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
 local function host(v)
-    need(type(v)=='string' and #v>0 and #v<=253 and v:match('^[%w%.%-]+$') and not v:find('%.%.') and v:sub(-1)~='.','Enter an IPv4 address or DNS hostname')
-    for label in v:gmatch('[^.]+') do need(#label<=63 and label:match('^%w') and label:match('%w$'),'Invalid DNS hostname') end
+    need(type(v)=='string' and #v>0 and #v<=253 and v:match('^[%w%.%-]+$') and not v:find('%.%.') and v:sub(-1)~='.','Введите IPv4-адрес или DNS-имя')
+    for label in v:gmatch('[^.]+') do need(#label<=63 and label:match('^%w') and label:match('%w$'),'Некорректное DNS-имя') end
     if v:match('^[%d%.]+$') then
-        local count=0;for octet in v:gmatch('[^.]+') do count=count+1;need(tonumber(octet)<=255 and tostring(tonumber(octet))==octet,'Invalid IPv4 endpoint') end
-        need(count==4,'Invalid IPv4 endpoint')
+        local count=0;for octet in v:gmatch('[^.]+') do count=count+1;need(tonumber(octet)<=255 and tostring(tonumber(octet))==octet,'Некорректный IPv4-адрес точки подключения') end
+        need(count==4,'Некорректный IPv4-адрес точки подключения')
     end
     return v
 end
-local function port(v)local n=tonumber(v);need(n and n%1==0 and n>=1 and n<=65535,'Invalid port');return n end
+local function port(v)local n=tonumber(v);need(n and n%1==0 and n>=1 and n<=65535,'Некорректный порт');return n end
 local function ip(v)
-    local a,b,c,d=tostring(v):match('^(%d+)%.(%d+)%.(%d+)%.(%d+)$');local parts={a,b,c,d};need(#parts==4,'Invalid IPv4 address')
-    local value=0;for _,s in ipairs(parts) do local n=tonumber(s);need(n<=255 and tostring(n)==s,'Invalid IPv4 address');value=value*256+n end
+    local a,b,c,d=tostring(v):match('^(%d+)%.(%d+)%.(%d+)%.(%d+)$');local parts={a,b,c,d};need(#parts==4,'Некорректный IPv4-адрес')
+    local value=0;for _,s in ipairs(parts) do local n=tonumber(s);need(n<=255 and tostring(n)==s,'Некорректный IPv4-адрес');value=value*256+n end
     return value
 end
 local function ipv4(n)return string.format('%d.%d.%d.%d',math.floor(n/16777216)%256,math.floor(n/65536)%256,math.floor(n/256)%256,n%256)end
 local function cidr(s)
-    local a,b=tostring(s):match('^([^/]+)/(%d+)$');local bits=tonumber(b);need(bits and bits>=8 and bits<=30,'Use an IPv4 CIDR with prefix /8 to /30')
+    local a,b=tostring(s):match('^([^/]+)/(%d+)$');local bits=tonumber(b);need(bits and bits>=8 and bits<=30,'Укажите IPv4-подсеть с префиксом от /8 до /30')
     local value=ip(a);local span=2^(32-bits);local first=value-value%span
     return {first=first,last=first+span-1,bits=bits,text=ipv4(first)..'/'..bits}
 end
 M.cidr=cidr
 local function candidates(paths)for _,p in ipairs(paths) do if fs.access(p,'x') then return p end end end
 function M.tools()
-    return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/NETSCOPE/amneziawg/bin/awg'}),
-        wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru'}),
+    return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
+        wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
         manager=candidates({'/usr/libexec/netscope-vpn-profile'})}
 end
 local function inventory()
-    local used,routes={},{}
+    local used_udp,used_tcp,routes={},{},{}
     local netstat=candidates({'/sbin/netstat','/bin/netstat','/usr/bin/netstat'})
     if netstat then
-        local ok,out=P.exec({netstat,'-lnu'},3)
-        if ok then for line in out:gmatch('[^\n]+') do local p=tonumber(line:match(':(%d+)%s'));if p then used[p]=true end end end
+        local ok,out=P.exec({netstat,'-lntu'},3)
+        if ok then for line in out:gmatch('[^\n]+') do
+            local proto=line:match('^(%S+)') or '';local p=tonumber(line:match(':(%d+)%s'))
+            if p and proto:match('^udp') then used_udp[p]=true elseif p and proto:match('^tcp') then used_tcp[p]=true end
+        end end
     end
     local ipbin=candidates({'/sbin/ip','/bin/ip','/usr/sbin/ip','/usr/bin/ip'})
     if ipbin then
@@ -48,50 +51,50 @@ local function inventory()
         end end
     end
     local recommended_port
-    for _,candidate in ipairs({51820,51822,51823,51824,51825}) do if not used[candidate] then recommended_port=candidate;break end end
+    for _,candidate in ipairs({51820,51822,51823,51824,51825}) do if not used_udp[candidate] then recommended_port=candidate;break end end
     local recommended_tunnel
     for _,candidate in ipairs({'10.77.0.0/24','10.88.0.0/24','172.31.253.0/24','192.168.77.0/24'}) do
         local block=cidr(candidate);local overlap=false
         for _,live in ipairs(routes) do if block.first<=live.last and live.first<=block.last then overlap=true;break end end
         if not overlap then recommended_tunnel=candidate;break end
     end
-    return {used=used,routes=routes,recommended_port=recommended_port or 51820,recommended_tunnel=recommended_tunnel or '10.77.0.0/24'}
+    return {used=used_udp,used_udp=used_udp,used_tcp=used_tcp,routes=routes,recommended_port=recommended_port or 51820,recommended_tunnel=recommended_tunnel or '10.77.0.0/24'}
 end
 M.inventory=inventory
 function M.status()
     local u=require('luci.model.uci').cursor();local address=u:get('network','lan','ipaddr');local mask=u:get('network','lan','netmask') or '255.255.255.0';local lan=''
     local ok,value=pcall(function()local span=4294967296-ip(mask);local bits=32
         while span>1 and span%2==0 do span=span/2;bits=bits-1 end
-        need(span==1,'Invalid netmask');return cidr(address..'/'..bits).text end)
+        need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil or t.awg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'wg-activation' or 'prepare-only',
-        note=t.manager and 'Private drafts plus transactional activation for a separate plain WireGuard interface. AWG, Xray and Mieru activation remain unavailable.'
-            or 'Creates private drafts and checks them. Existing VPNs, firewall and routes are not modified. Activation manager is not installed.'}
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,manager=t.manager~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray и Mieru. Каждый профиль использует только собственный интерфейс или loopback-порт.'
+            or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
 local function write(path,data)
-    need(C.safe(path) and not fs.lstat(path),'Draft path already exists or is unsafe')
+    need(C.safe(path) and not fs.lstat(path),'Путь черновика уже существует или небезопасен')
     local f=assert(io.open(path,'wb'));assert(f:write(data));assert(f:close());assert(fs.chmod(path,'600'))
 end
 local function key(tool,dir,name)
-    local ok,private=P.exec({tool,'genkey'},3);need(ok,'VPN key generation failed');private=private:match('^%s*(.-)%s*$');need(#private==44 and private:match('^[%w+/]+=+$'),'Invalid generated key')
+    local ok,private=P.exec({tool,'genkey'},3);need(ok,'Не удалось создать ключ VPN');private=private:match('^%s*(.-)%s*$');need(#private==44 and private:match('^[%w+/]+=+$'),'Создан некорректный ключ')
     local path=dir..'/'..name..'.key';write(path,private..'\n')
     -- Fixed shell program; executable and private path are separate positional args.
     local good,public=P.exec({'/bin/sh','-c','exec "$1" pubkey < "$2"','netscope-key',tool,path},3)
-    fs.unlink(path);need(good,'VPN public key derivation failed');public=public:match('^%s*(.-)%s*$');need(#public==44 and public:match('^[%w+/]+=+$'),'Invalid derived public key')
+    fs.unlink(path);need(good,'Не удалось получить публичный ключ VPN');public=public:match('^%s*(.-)%s*$');need(#public==44 and public:match('^[%w+/]+=+$'),'Получен некорректный публичный ключ')
     return private,public
 end
 local function tunnel_plan(input,dir)
-    local kind=input.kind;local t=M.tools();local tool=t.wg or t.awg;if kind=='awg' then tool=t.awg end;need(tool,'Matching WireGuard/AmneziaWG tools are not installed')
-    local endpoint=host(input.endpoint);local listen=port(input.port);local net=cidr(input.tunnel);need(net.bits>=24 and net.bits<=28,'Tunnel prefix must be /24 to /28')
-    local live=inventory();need(not live.used[listen],'UDP port '..listen..' is already in use; choose the suggested free port')
-    for _,block in ipairs(live.routes) do need(net.last<block.first or block.last<net.first,'Tunnel subnet overlaps an active route: '..block.text) end
+    local kind=input.kind;local t=M.tools();local tool=t.wg or t.awg;if kind=='awg' then tool=t.awg end;need(tool,'Не установлены подходящие инструменты WireGuard/AmneziaWG')
+    local endpoint=host(input.endpoint);local listen=port(input.port);local net=cidr(input.tunnel);need(net.bits>=24 and net.bits<=28,'Префикс туннеля должен быть от /24 до /28')
+    local live=inventory();need(not live.used[listen],'UDP-порт '..listen..' уже занят; выберите предложенный свободный порт')
+    for _,block in ipairs(live.routes) do need(net.last<block.first or block.last<net.first,'Подсеть туннеля пересекается с активным маршрутом: '..block.text) end
     local allowed={};local overlaps=false
     for value in tostring(input.lan or ''):gmatch('[^,%s]+') do
-        local block=cidr(value);need(#allowed<16,'At most 16 client routes');allowed[#allowed+1]=block.text
+        local block=cidr(value);need(#allowed<16,'Допускается не более 16 маршрутов клиента');allowed[#allowed+1]=block.text
         if net.first<=block.last and block.first<=net.last then overlaps=true end
     end
-    need(#allowed>0 and not overlaps,'LAN/office routes are missing or overlap the tunnel')
+    need(#allowed>0 and not overlaps,'Домашние или офисные маршруты отсутствуют либо пересекаются с туннелем')
     local dns=ipv4(net.first+1);local client=ipv4(net.first+2)
     local server_key,server_pub=key(tool,dir,'server');local client_key,client_pub=key(tool,dir,'client')
     local obfuscation=''
@@ -99,7 +102,7 @@ local function tunnel_plan(input,dir)
         -- Explicit AWG v1-compatible profile; no claim of AWG 2/3 compatibility.
         local unique={};local numbers={}
         for _=1,32 do local h=tonumber(require('luci.sys').uniqueid(4),16);if h and h>4 and not unique[h] then unique[h]=true;numbers[#numbers+1]=h end;if #numbers==4 then break end end
-        need(#numbers==4,'Secure random header generation failed')
+        need(#numbers==4,'Не удалось безопасно создать случайные заголовки')
         -- QWRT Lua uses a signed formatter even on aarch64; H values are uint32.
         obfuscation=string.format('Jc = 4\nJmin = 40\nJmax = 70\nS1 = 0\nS2 = 0\nH1 = %.0f\nH2 = %.0f\nH3 = %.0f\nH4 = %.0f\n',unpack(numbers))
     end
@@ -107,151 +110,167 @@ local function tunnel_plan(input,dir)
     -- No DNS directive before a DNS listener/input rule has been configured.
     local client_config='[Interface]\nPrivateKey = '..client_key..'\nAddress = '..client..'/32\n'..obfuscation..'\n[Peer]\nPublicKey = '..server_pub..'\nEndpoint = '..endpoint..':'..listen..'\nAllowedIPs = '..table.concat(allowed,', ')..', '..dns..'/32\nPersistentKeepalive = 25\n'
     write(dir..'/server.conf',server);write(dir..'/client.conf',client_config)
-    return {kind=kind,protocol=kind=='awg' and 'AmneziaWG v1-compatible' or 'WireGuard',state='DRAFT',server_address=dns..'/'..net.bits,client_address=client..'/32',listen_port=listen,
-        routes=allowed,files={'server.conf','client.conf'},checks={'UDP port was free while preparing','Tunnel subnet did not overlap active main-table routes','Private keys are stored only in the downloaded configuration files'},
-        planned_changes={'Create a new VPN interface','Open UDP '..listen..' from WAN','Allow VPN clients to selected LAN/office routes','Provide router DNS only after its listener is verified'},
-        note='Unique keys generated. DNS, WAN input, LAN forwarding and interface activation are intentionally not applied. Existing VPNs are untouched.'}
+    return {kind=kind,protocol=kind=='awg' and 'AmneziaWG v1-совместимый' or 'WireGuard',state='DRAFT',server_address=dns..'/'..net.bits,client_address=client..'/32',listen_port=listen,
+        routes=allowed,files={'server.conf','client.conf'},checks={'UDP-порт был свободен во время подготовки','Подсеть туннеля не пересекалась с активными маршрутами основной таблицы','Приватные ключи хранятся только в скачиваемых файлах конфигурации'},
+        planned_changes={'Создать новый интерфейс VPN','Открыть UDP '..listen..' со стороны WAN','Разрешить клиентам VPN выбранные домашние и офисные маршруты','Разрешить DNS роутера только после проверки его прослушивания'},
+        note='Созданы уникальные ключи. DNS, вход с WAN, пересылка в LAN и включение интерфейса намеренно не применялись. Существующие VPN не затронуты.'}
 end
 local function vless_plan(input,dir)
-    need(type(input.profile)=='string' and #input.profile<=12000,'Paste a VLESS outbound JSON (maximum 12 KB)')
-    local out=json.parse(input.profile);need(type(out)=='table' and out.protocol=='vless','Expected one VLESS outbound JSON object, not a subscription or full configuration')
-    local stream=out.streamSettings or {};need(stream.security=='tls' or stream.security=='reality','TLS or Reality is required')
-    need(stream.network=='tcp' or stream.network=='raw' or stream.network=='xhttp' or stream.network=='ws' or stream.network=='grpc','Unsupported VLESS transport')
-    need(not out.proxySettings and not stream.sockopt,'Remove custom proxySettings/sockopt from this initial profile')
-    local servers=out.settings and out.settings.vnext;need(type(servers)=='table' and #servers==1,'Exactly one VLESS server is required')
-    local v=servers[1];host(v.address);port(v.port);need(type(v.users)=='table' and #v.users==1,'Exactly one VLESS user is required')
-    need(type(v.users[1].id)=='string' and v.users[1].id:match('^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$'),'Invalid VLESS UUID')
-    local tls=stream.security=='tls' and stream.tlsSettings or stream.realitySettings;need(type(tls)=='table' and tls.allowInsecure~=true,'Certificate validation must remain enabled')
+    need(type(input.profile)=='string' and #input.profile<=12000,'Вставьте исходящий объект VLESS в JSON (не более 12 КБ)')
+    local out=json.parse(input.profile);need(type(out)=='table' and out.protocol=='vless','Ожидается один исходящий объект VLESS в JSON, а не подписка или полная конфигурация')
+    local stream=out.streamSettings or {};need(stream.security=='tls' or stream.security=='reality','Требуется TLS или Reality')
+    need(stream.network=='tcp' or stream.network=='raw' or stream.network=='xhttp' or stream.network=='ws' or stream.network=='grpc','Неподдерживаемый транспорт VLESS')
+    need(not out.proxySettings and not stream.sockopt,'Удалите пользовательские proxySettings/sockopt из первоначального профиля')
+    local servers=out.settings and out.settings.vnext;need(type(servers)=='table' and #servers==1,'Требуется ровно один сервер VLESS')
+    local v=servers[1];host(v.address);port(v.port);need(type(v.users)=='table' and #v.users==1,'Требуется ровно один пользователь VLESS')
+    need(type(v.users[1].id)=='string' and v.users[1].id:match('^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$'),'Некорректный UUID VLESS')
+    local tls=stream.security=='tls' and stream.tlsSettings or stream.realitySettings;need(type(tls)=='table' and tls.allowInsecure~=true,'Проверка сертификата должна оставаться включённой')
     out={tag='proxy',protocol='vless',settings=out.settings,streamSettings=stream}
     local config={log={loglevel='none'},inbounds={{tag='local-test',listen='127.0.0.1',port=2081,protocol='socks',settings={udp=true}}},outbounds={out},routing={domainStrategy='AsIs'}}
     write(dir..'/xray.json',json.stringify(config))
     local binary=M.tools().xray;local tested=false
-    if binary then local ok=P.exec({binary,'run','-test','-config',dir..'/xray.json'},6);need(ok,'Xray rejected the profile; no VPN changes were made');tested=true end
-    return {kind='vless',state='DRAFT',validated=tested,files={'xray.json'},note='Loopback SOCKS test configuration only. No daemon, split routes, DNS policy or firewall rules were started.'}
+    if binary then local ok=P.exec({binary,'run','-test','-config',dir..'/xray.json'},6);need(ok,'Xray отклонил профиль; настройки VPN не изменялись');tested=true end
+    return {kind='vless',protocol='VLESS / Xray',state='DRAFT',validated=tested,files={'xray.json'},local_port=2081,
+        checks={'Конфигурация принимает ровно один VLESS outbound с TLS или Reality','SOCKS слушает только 127.0.0.1:2081','Проверка сертификата upstream не отключена'},
+        planned_changes={'Запустить отдельный процесс Xray из приватного черновика','Проверить процесс и SOCKS-listener 127.0.0.1:2081','Не менять default route, DNS, UCI и существующий vless-router'},
+        note='Подготовлен отдельный локальный SOCKS-профиль. Он начнёт принимать подключения только после preflight и явного включения; автоматическая маршрутизация трафика не добавляется.'}
 end
 local function mieru_plan(input,dir)
     local endpoint=input.mieru_endpoint or '';local username=input.mieru_user or '';local password=input.mieru_password or ''
     local template=endpoint=='' and username=='' and password==''
     if template then endpoint='server.example.invalid';username='CHANGE_ME';password='CHANGE_ME'
-    else host(endpoint);need(#username>0 and #username<=128 and not username:find('%c'),'Enter the Mieru server username')
-        need(#password>0 and #password<=512 and not password:find('%c'),'Enter the Mieru server password') end
-    local protocol=input.mieru_transport or 'TCP';need(protocol=='TCP' or protocol=='UDP','Choose TCP or UDP')
+    else host(endpoint);need(#username>0 and #username<=128 and not username:find('%c'),'Введите имя пользователя сервера Mieru')
+        need(#password>0 and #password<=512 and not password:find('%c'),'Введите пароль сервера Mieru') end
+    local protocol=input.mieru_transport or 'TCP';need(protocol=='TCP' or protocol=='UDP','Выберите TCP или UDP')
     local server={portBindings={{port=port(input.mieru_port or 443),protocol=protocol}}}
     if endpoint:match('^[%d%.]+$') then server.ipAddress=endpoint else server.domainName=endpoint end
     local config={profiles={{profileName='netscope',user={name=username,password=password},servers={server},mtu=1400}},
         activeProfile='netscope',rpcPort=8964,socks5Port=2082,socks5ListenLAN=false,loggingLevel='WARN'}
     write(dir..'/mieru.json',json.stringify(config))
-    return {kind='mieru',state=template and 'TEMPLATE' or 'DRAFT',validated=false,files={'mieru.json'},
-        note=template and 'Template only: replace server.example.invalid and both CHANGE_ME values with your future Mieru server credentials. No service or failover was configured.'
-            or 'Prepared a loopback-only Mieru client configuration. Server credentials, runtime compatibility and connectivity are not tested. No service, routes or failover were started.'}
+    return {kind='mieru',protocol='Mieru',state=template and 'TEMPLATE' or 'DRAFT',validated=false,files={'mieru.json'},local_port=2082,
+        checks={'SOCKS слушает только 127.0.0.1:2082','Runtime использует конфигурацию выбранного черновика, не глобальный профиль','Логи и служебный HOME ограничены каталогом NETSCOPE runtime'},
+        planned_changes={'Запустить отдельный процесс Mieru из приватного черновика','Проверить процесс и SOCKS-listener 127.0.0.1:2082','Не менять default route, DNS, UCI и другие VPN'},
+        note=template and 'Только шаблон: замените server.example.invalid и оба значения CHANGE_ME данными будущего сервера Mieru. Служба и резервирование не настраивались.'
+            or 'Подготовлен отдельный локальный SOCKS-профиль. Он начнёт принимать подключения только после preflight и явного включения; автоматическая маршрутизация трафика не добавляется.'}
 end
 function M.prepare(input)
-    need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru'),'Choose WireGuard, AmneziaWG, VLESS or Mieru')
-    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>16000000,'Writable USB with free space required')
+    need(type(input)=='table' and (input.kind=='wg' or input.kind=='awg' or input.kind=='vless' or input.kind=='mieru'),'Выберите WireGuard, AmneziaWG, VLESS или Mieru')
+    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>16000000,'Требуется доступный для записи USB-накопитель со свободным местом')
     local root=C.ROOT..'/config/setup';C.mkdir(C.ROOT..'/config');C.mkdir(root)
-    local count=0;for _ in fs.dir(root) do count=count+1 end;need(count<20,'20 saved drafts reached; securely archive/remove old drafts before creating more')
-    local id=os.date('!%Y%m%dT%H%M%S')..'-'..require('luci.sys').uniqueid(5);need(id:match('^[%w%-]+$'),'Invalid draft id')
-    local dir=root..'/'..id;need(not fs.lstat(dir),'Draft collision');C.mkdir(dir)
+    local count=0;for _ in fs.dir(root) do count=count+1 end;need(count<20,'Достигнут предел в 20 черновиков; безопасно архивируйте или удалите старые')
+    local id=os.date('!%Y%m%dT%H%M%S')..'-'..require('luci.sys').uniqueid(5);need(id:match('^[%w%-]+$'),'Некорректный идентификатор черновика')
+    local dir=root..'/'..id;need(not fs.lstat(dir),'Конфликт идентификатора черновика');C.mkdir(dir)
     local ok,result=pcall(function()
         local result=(input.kind=='vless' and vless_plan or input.kind=='mieru' and mieru_plan or tunnel_plan)(input,dir)
         result.id=id;C.atomic(dir..'/plan.json',result);return result
     end)
     if not ok then
         for _,name in ipairs({'server.key','client.key','server.conf','client.conf','xray.json','mieru.json','plan.json','plan.json.new'}) do fs.unlink(dir..'/'..name) end
-        fs.rmdir(dir);error(tostring(result):match(':%d+: (.*)') or 'Preparation failed')
+        fs.rmdir(dir);error(tostring(result):match(':%d+: (.*)') or 'Подготовка завершилась ошибкой')
     end
     return result
 end
 function M.download(id,file)
-    local storage=C.storage();need(storage.mounted and not storage.error,'USB unavailable')
-    need(C.valid_id(id),'Invalid draft')
-    need(file=='server.conf' or file=='client.conf' or file=='xray.json' or file=='mieru.json' or file=='plan.json','Invalid file')
-    local path=C.ROOT..'/config/setup/'..id..'/'..file;need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Draft unavailable');return path
+    local storage=C.storage();need(storage.mounted and not storage.error,'USB недоступен')
+    need(C.valid_id(id),'Некорректный черновик')
+    need(file=='server.conf' or file=='client.conf' or file=='xray.json' or file=='mieru.json' or file=='plan.json','Некорректный файл')
+    local path=C.ROOT..'/config/setup/'..id..'/'..file;need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Черновик недоступен');return path
 end
 local allowed_files={['server.conf']=true,['client.conf']=true,['xray.json']=true,['mieru.json']=true,['plan.json']=true}
 local function draft(id)
-    need(C.valid_id(id),'Invalid draft')
-    local dir=C.ROOT..'/config/setup/'..id;need(C.safe(dir) and (fs.lstat(dir) or {}).type=='dir','Draft unavailable')
-    local path=dir..'/plan.json';need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','Draft plan unavailable')
-    local value=json.parse(need(C.read(path,20000),'Draft plan unavailable'));need(type(value)=='table' and value.id==id,'Invalid draft plan')
+    need(C.valid_id(id),'Некорректный черновик')
+    local dir=C.ROOT..'/config/setup/'..id;need(C.safe(dir) and (fs.lstat(dir) or {}).type=='dir','Черновик недоступен')
+    local path=dir..'/plan.json';need(C.safe(path) and (fs.lstat(path) or {}).type=='reg','План черновика недоступен')
+    local value=json.parse(need(C.read(path,20000),'План черновика недоступен'));need(type(value)=='table' and value.id==id,'Некорректный план черновика')
     return value,dir
 end
-local function runtime_status(manager)
-    if not manager then return {active=false,pending=false,healthy=false,id=''} end
-    local ok,out=P.exec({manager,'status'},3);if not ok then return {active=false,pending=false,healthy=false,id='',error='Runtime status unavailable'} end
-    local value=json.parse(out);if type(value)~='table' or (value.id~='' and not C.valid_id(value.id)) then return {active=false,pending=false,healthy=false,id='',error='Invalid runtime status'} end
-    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',interface=value.interface}
+local function runtime_status(manager,kind)
+    if not manager then return {active=false,pending=false,healthy=false,id='',kind=kind} end
+    local ok,out=P.exec({manager,'status',kind or 'wg'},3);if not ok then return {active=false,pending=false,healthy=false,id='',kind=kind,error='Состояние среды выполнения недоступно'} end
+    local value=json.parse(out);if type(value)~='table' or value.kind~=(kind or 'wg') or (value.id~='' and not C.valid_id(value.id)) then
+        return {active=false,pending=false,healthy=false,id='',kind=kind,error='Некорректное состояние среды выполнения'}
+    end
+    return {active=value.active==true,pending=value.pending==true,healthy=value.healthy==true,id=value.id or '',kind=value.kind,interface=value.interface,listen=value.listen,local_port=value.local_port}
 end
-M.runtime_status=function()return runtime_status(M.tools().manager)end
+M.runtime_status=function(kind)return runtime_status(M.tools().manager,kind or 'wg')end
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end
     local root=C.ROOT..'/config/setup';if (fs.lstat(root) or {}).type~='dir' then return {} end
-    local active=runtime_status(M.tools().manager);local out={};for id in fs.dir(root) do
+    local manager=M.tools().manager;local active={};for _,kind in ipairs({'wg','awg','vless','mieru'}) do active[kind]=runtime_status(manager,kind) end
+    local out={};for id in fs.dir(root) do
         if C.valid_id(id) and #out<20 then local ok,value=pcall(draft,id);if ok then
+            local live=active[value.kind] or {}
             out[#out+1]={id=id,created=id:sub(1,8)..' '..id:sub(10,15)..' UTC',kind=value.kind,protocol=value.protocol,
                 state=value.state,validated=value.validated==true,listen_port=value.listen_port,server_address=value.server_address,
-                files=value.files or {},note=value.note,active=active.active and active.id==id,pending=active.pending and active.id==id}
+                local_port=value.local_port,files=value.files or {},note=value.note,active=live.active and live.id==id,pending=live.pending and live.id==id,healthy=live.healthy and live.id==id}
         end end
     end
     table.sort(out,function(a,b)return a.id>b.id end);return out
 end
 function M.preflight(id)
     local value,dir=draft(id);local checks,blockers={},{}
-    local function result(ok,label)checks[#checks+1]=(ok and 'PASS · ' or 'BLOCK · ')..label;if not ok then blockers[#blockers+1]=label end end
-    local storage=C.storage(true);result(storage.mounted and storage.writable and not storage.error,'USB storage is mounted and writable')
+    local function result(ok,label)checks[#checks+1]=(ok and 'ПРОЙДЕНО · ' or 'БЛОКИРОВКА · ')..label;if not ok then blockers[#blockers+1]=label end end
+    local storage=C.storage(true);result(storage.mounted and storage.writable and not storage.error,'USB-накопитель подключён и доступен для записи')
     for _,name in ipairs(value.files or {}) do
-        local st=allowed_files[name] and fs.lstat(dir..'/'..name);result(st and st.type=='reg','Private file '..tostring(name)..' is present and not a symlink')
+        local st=allowed_files[name] and fs.lstat(dir..'/'..name);result(st and st.type=='reg','Приватный файл '..tostring(name)..' существует и не является символической ссылкой')
     end
     local tools=M.tools();local live=inventory();local activation_supported=false
     if value.kind=='wg' or value.kind=='awg' then
-        result((value.kind=='wg' and tools.wg or tools.awg)~=nil,'Matching tunnel tools are installed')
-        result(type(value.listen_port)=='number' and not live.used[value.listen_port],'UDP '..tostring(value.listen_port)..' is still free')
-        local net=cidr(need(value.server_address,'Draft has no tunnel address'));local overlap=false
+        result((value.kind=='wg' and tools.wg or tools.awg)~=nil,'Установлены подходящие инструменты туннеля')
+        result(type(value.listen_port)=='number' and not live.used[value.listen_port],'UDP '..tostring(value.listen_port)..' по-прежнему свободен')
+        local net=cidr(need(value.server_address,'В черновике нет адреса туннеля'));local overlap=false
         for _,route in ipairs(live.routes) do if net.first<=route.last and route.first<=net.last then overlap=true;break end end
-        result(not overlap,'Tunnel subnet still does not overlap the main routing table')
-        result((C.read('/proc/sys/net/ipv4/ip_forward',8) or ''):match('1')~=nil,'IPv4 forwarding is enabled')
-        result(candidates({'/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables'})~=nil,'iptables is available')
-        if value.kind=='wg' then activation_supported=tools.manager~=nil;result(activation_supported,'Transactional WireGuard manager is installed')
-        else result(false,'AmneziaWG activation is not released; the existing awg_remote service will not be replaced') end
+        result(not overlap,'Подсеть туннеля по-прежнему не пересекается с основной таблицей маршрутизации')
+        result((C.read('/proc/sys/net/ipv4/ip_forward',8) or ''):match('1')~=nil,'Пересылка IPv4 включена')
+        result(candidates({'/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables'})~=nil,'iptables доступен')
+        activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
     elseif value.kind=='vless' then
-        result(tools.xray~=nil,'Xray runtime is installed')
-        if tools.xray then local ok=P.exec({tools.xray,'run','-test','-config',dir..'/xray.json'},6);result(ok,'Xray accepts the saved configuration') end
-        result(false,'Split-routing activation remains intentionally unavailable')
+        result(tools.xray~=nil,'Среда Xray установлена')
+        if tools.xray then local ok=P.exec({tools.xray,'run','-test','-config',dir..'/xray.json'},6);result(ok,'Xray принимает сохранённую конфигурацию') end
+        result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
+        activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
     elseif value.kind=='mieru' then
-        result(value.state~='TEMPLATE','Mieru server credentials are configured')
-        result(tools.mieru~=nil,'Mieru runtime is installed')
-        result(false,'Mieru failover activation remains intentionally unavailable')
-    else result(false,'Draft protocol is supported') end
-    return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=activation_supported,stage='preflight-only',checks=checks,blockers=blockers,
-        rollback={'Remove NETSCOPE-owned redirect/input/forward rules first','Stop only the new profile process','Remove only its dedicated interface','Restore its own saved files; never restart network/firewall'},
-        note='Read-only preflight completed. No interface, process, route, DNS or firewall rule was changed.'}
+        result(value.state~='TEMPLATE','Данные сервера Mieru настроены')
+        result(tools.mieru~=nil,'Среда Mieru установлена')
+        result(type(value.local_port)=='number' and not live.used_tcp[value.local_port],'Локальный TCP-порт '..tostring(value.local_port)..' свободен')
+        activation_supported=tools.manager~=nil;result(activation_supported,'Установлен транзакционный диспетчер NETSCOPE')
+    else result(false,'Протокол черновика поддерживается') end
+    return {id=id,kind=value.kind,ready=#blockers==0,activation_supported=activation_supported,stage='activation-ready',checks=checks,blockers=blockers,
+        rollback={'Сначала удалить собственные правила NETSCOPE для перенаправления, входа и пересылки','Остановить только процесс нового профиля','Удалить только его отдельный интерфейс','Восстановить только его файлы; не перезапускать сеть и межсетевой экран'},
+        note='Предварительная проверка без изменений завершена. Интерфейсы, процессы, маршруты, DNS и правила межсетевого экрана не менялись.'}
 end
 function M.delete(id)
-    local value,dir=draft(id);local active=runtime_status(M.tools().manager);need(active.id~=id or not (active.active or active.pending),'Stop the profile before deleting its private files')
+    local value,dir=draft(id);local active=runtime_status(M.tools().manager,value.kind);need(active.id~=id or not (active.active or active.pending),'Остановите профиль перед удалением его приватных файлов')
     local seen={};for name in fs.dir(dir) do
-        need(allowed_files[name] and not seen[name],'Draft contains an unexpected file; refusing automatic deletion')
-        local st=fs.lstat(dir..'/'..name);need(st and st.type=='reg','Draft contains a non-regular file; refusing automatic deletion');seen[name]=true
+        need(allowed_files[name] and not seen[name],'Черновик содержит неожиданный файл; автоматическое удаление отменено')
+        local st=fs.lstat(dir..'/'..name);need(st and st.type=='reg','Черновик содержит файл неподдерживаемого типа; автоматическое удаление отменено');seen[name]=true
     end
-    for name in pairs(seen) do need(fs.unlink(dir..'/'..name),'Could not delete private draft file') end
-    need(fs.rmdir(dir),'Could not remove private draft directory')
-    return {id=id,deleted=true,kind=value.kind,note='Private draft deleted. No running VPN or network setting was changed.'}
+    for name in pairs(seen) do need(fs.unlink(dir..'/'..name),'Не удалось удалить файл приватного черновика') end
+    need(fs.rmdir(dir),'Не удалось удалить каталог приватного черновика')
+    return {id=id,deleted=true,kind=value.kind,note='Приватный черновик удалён. Работающие VPN и настройки сети не изменялись.'}
 end
 function M.activate(id)
-    local value=draft(id);need(value.kind=='wg','Transactional activation is currently available only for plain WireGuard')
-    local report=M.preflight(id);need(report.ready and report.activation_supported,'Activation preflight is blocked')
-    local manager=need(M.tools().manager,'Transactional manager is not installed');local network=cidr(value.server_address).text
-    local argv={manager,'start',id,value.server_address,network,tostring(value.listen_port)};for _,route in ipairs(value.routes or {}) do argv[#argv+1]=route end
-    local ok,out=P.exec(argv,12);if not ok then error('WireGuard start failed and was rolled back: '..tostring(out):sub(1,240)) end
-    local pending=json.parse(out);if type(pending)~='table' or not pending.pending or pending.id~=id or not pending.healthy then P.exec({manager,'rollback',id},6);error('WireGuard did not reach a healthy pending state; rolled back') end
-    local confirmed,final=P.exec({manager,'confirm',id},6);if not confirmed then P.exec({manager,'rollback',id},6);error('WireGuard confirmation failed; rolled back') end
-    local state=json.parse(final);need(type(state)=='table' and state.active and state.healthy and state.id==id,'WireGuard confirmation returned invalid status')
-    return {id=id,active=true,healthy=true,kind='wg',interface=state.interface,note='Separate WireGuard profile is active. Existing AWG, Xray, L2TP, UCI and default route were not changed.'}
+    local value=draft(id)
+    local report=M.preflight(id);need(report.ready and report.activation_supported,'Предварительная проверка заблокировала включение')
+    local manager=need(M.tools().manager,'Транзакционный диспетчер не установлен');local argv={manager,'start',value.kind,id}
+    if value.kind=='wg' or value.kind=='awg' then
+        local network=cidr(value.server_address).text;argv[#argv+1]=value.server_address;argv[#argv+1]=network;argv[#argv+1]=tostring(value.listen_port)
+        for _,route in ipairs(value.routes or {}) do argv[#argv+1]=route end
+    end
+    local ok,out=P.exec(argv,15);if not ok then error('Запуск '..tostring(value.protocol or value.kind)..' завершился ошибкой и был отменён: '..tostring(out):sub(1,240)) end
+    local pending=json.parse(out);if type(pending)~='table' or pending.kind~=value.kind or not pending.pending or pending.id~=id or not pending.healthy then
+        P.exec({manager,'rollback',value.kind,id},8);error('Профиль не достиг исправного состояния ожидания; выполнен откат')
+    end
+    local confirmed,final=P.exec({manager,'confirm',value.kind,id},8);if not confirmed then P.exec({manager,'rollback',value.kind,id},8);error('Не удалось подтвердить профиль; выполнен откат') end
+    local state=json.parse(final);need(type(state)=='table' and state.kind==value.kind and state.active and state.healthy and state.id==id,'Подтверждение профиля вернуло некорректное состояние')
+    return {id=id,active=true,healthy=true,kind=value.kind,interface=state.interface,listen=state.listen,local_port=state.local_port,
+        note='Отдельный профиль '..tostring(value.protocol or value.kind)..' активен. Существующие VPN, L2TP, UCI, DNS и маршрут по умолчанию не изменялись.'}
 end
 function M.deactivate(id)
-    need(C.valid_id(id),'Invalid draft');local manager=need(M.tools().manager,'Transactional manager is not installed');local state=runtime_status(manager)
-    need(state.id==id and (state.active or state.pending),'Selected profile is not active')
-    local ok,out=P.exec({manager,'stop',id},8);need(ok,'Profile cleanup failed; inspect NETSCOPE-owned chains before retrying')
-    local final=json.parse(out);need(type(final)=='table' and not final.active and not final.pending and not final.healthy,'Profile cleanup returned invalid status')
-    return {id=id,active=false,kind='wg',note='NETSCOPE rules were removed first, then the dedicated interface. Other VPNs and routes were untouched.'}
+    need(C.valid_id(id),'Некорректный черновик');local value=draft(id);local manager=need(M.tools().manager,'Транзакционный диспетчер не установлен');local state=runtime_status(manager,value.kind)
+    need(state.id==id and (state.active or state.pending),'Выбранный профиль не активен')
+    local ok,out=P.exec({manager,'stop',value.kind,id},12);need(ok,'Не удалось очистить профиль; перед повтором проверьте только собственные объекты NETSCOPE')
+    local final=json.parse(out);need(type(final)=='table' and final.kind==value.kind and not final.active and not final.pending and not final.healthy,'Очистка профиля вернула некорректное состояние')
+    return {id=id,active=false,kind=value.kind,note='Сначала удалены собственные правила NETSCOPE, затем отдельный интерфейс или процесс. Другие VPN и маршруты не затронуты.'}
 end
 return M

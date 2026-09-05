@@ -7,17 +7,17 @@
 [![NETSCOPE verification](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml)
 
 I develop NETSCOPE as a coherent software layer for my Xiaomi BE7000 (RC06):
-an English web UI, network visibility, guarded VPN setup, recovery, IoT
+a Russian LuCI web UI, network visibility, guarded VPN setup, recovery, IoT
 diagnostics and a separate Wi‑Fi 7/MLO lab.
 
 The current base is QWRT R26.02.02 / QSDK 12.5. NETSCOPE keeps the origin
 visible as `Based on QWRT` and preserves upstream authorship and licensing. It
 is not an official QWRT, Xiaomi, Qualcomm or OpenWrt project.
 
-> This repository is currently an open source tree of future firmware
-> components, not a flashable image. It does not contain the complete source
-> tree of the matching QWRT binary build, and no public NETSCOPE image has been
-> released. Working features, lab models and plans are labelled separately.
+> NETSCOPE 0.5 is released as a verifiable installable overlay for the exact
+> QWRT R26.2.2 base. It installs the UI and services on a running router, creates
+> a rollback backup and never writes NAND/UBI. It is not yet a factory or
+> sysupgrade image because the matching complete QWRT source/toolchain is not public.
 
 ## Why I am building it
 
@@ -37,9 +37,9 @@ maintainable product instead of a collection of one-off shell commands:
 
 | Component | Purpose | Current status |
 |---|---|---|
-| NETSCOPE UI | English LuCI shell, login, navigation and base version | runs on the test router; theme sources are still being consolidated here |
-| NETSCOPE Traffic | devices, conntrack, directions, ports, counters and controlled PCAP sessions | local prototype works; public packaging is incomplete |
-| VPN Quick setup | prepare WG, AWG, VLESS/Xray and Mieru from LuCI | sources published; plain WG has an isolated watchdog runtime, other modes are prepare-only |
+| NETSCOPE UI | Russian LuCI shell, login, navigation and base version | published as `luci-theme-netscope`; runs on the test router |
+| NETSCOPE Traffic | devices, conntrack, directions, ports, counters and controlled USB PCAP sessions | published as `luci-app-netscope`; Capture stays OFF after installation |
+| VPN Quick setup | prepare and explicitly activate WG, AWG, VLESS/Xray and Mieru from LuCI | each protocol has preflight, confirmation, health checks and isolated rollback; a missing runtime blocks activation |
 | IoT monitor | distinguish Wi‑Fi, DHCP, DNS, WAN and cloud failures | read-only tool published |
 | Recovery | backups, known-good baseline and return procedure | runbook published; no recovery image is distributed |
 | Wi‑Fi 7 / MLO Lab | investigate the vendor 5G-low + 5G-high topology | models, render-only helper and tests only; no live apply |
@@ -88,6 +88,9 @@ future hardware acceptance gates. The UI concept is available
 
 ```text
 firmware/
+  overlay/                            guarded installer for QWRT R26.2.2
+  packages/luci-app-netscope/         Traffic, PCAP and optional HTTPS lab
+  packages/luci-theme-netscope/       Russian LuCI shell
   packages/luci-app-netscope-setup/   LuCI VPN Quick setup
   packages/netscope-wifi7-lab/        read-only Wi-Fi 7 preflight/renderer
   profiles/                            target base profile and release gates
@@ -118,7 +121,9 @@ multi-link association.
 
 ## Release boundary
 
-The first image requires a pinned build base and toolchain, verified NAND/UBI
+The public overlay is built solely from this repository with
+`python tools/build_overlay.py`; see [the install guide](docs/INSTALL-OVERLAY.md).
+The first flashable image still requires a pinned build base and toolchain, verified NAND/UBI
 layout, clean first boot, a backup slot, power-loss tests and a proven return
 to a known-good image. `sysupgrade -F`, ART writes and calibration data copied
 from another router are not acceptable shortcuts.

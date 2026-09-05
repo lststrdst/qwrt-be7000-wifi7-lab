@@ -1,0 +1,14 @@
+#!/usr/bin/lua
+-- Independent fail-open watchdog: still runs if the capture worker is stuck.
+local C=require'luci.model.netscope_capture';local P=require'luci.model.netscope_capture_proxy'
+local n=require'nixio'
+while true do
+    local s=C.json(C.RUN..'/status.json') or {}
+    if s.https or s.proxy_starting then
+        local storage=C.storage()
+        if os.time()-(s.heartbeat or 0)>6 or not storage.mounted or storage.identity~=s.storage_identity then
+            pcall(P.stop)
+        end
+    end
+    n.nanosleep(1,0)
+end

@@ -1,8 +1,8 @@
 # Компоненты прошивки NETSCOPE
 
-Этот каталог содержит пакеты и профиль будущего образа NETSCOPE для Xiaomi
-BE7000. Сейчас он не является готовым ImageBuilder/SDK tree и не производит
-flashable image.
+Этот каталог содержит пакеты и профиль NETSCOPE для Xiaomi BE7000. Из них
+собирается публичный installable overlay для точной QWRT R26.2.2. Он не является
+ImageBuilder/SDK tree и не выдаётся за flashable factory/sysupgrade image.
 
 ## Зачем нужен отдельный каталог
 
@@ -11,6 +11,17 @@ flashable image.
 границы runtime, не смешивая их с живой конфигурацией устройства.
 
 ## Состав
+
+### `packages/luci-app-netscope`
+
+NETSCOPE Traffic/Devices, bounded USB PCAP, metadata decoder и опциональный
+контроллер HTTPS lab. Capture после установки остаётся выключен. При аварии
+сначала удаляются только NETSCOPE redirects, затем останавливаются его процессы.
+
+### `packages/luci-theme-netscope`
+
+Русская оболочка LuCI для Xiaomi BE7000: вход, навигация, версия NETSCOPE и
+атрибуция QWRT, встроенный Traffic, быстрые разделы и штатное сохранение пароля.
 
 ### `packages/luci-app-netscope-setup`
 
@@ -22,9 +33,10 @@ LuCI-приложение **VPN Quick setup**:
 - хранит приватные файлы с `0700/0600`;
 - не пишет секреты в browser storage;
 - не меняет UCI и default route;
-- для plain WireGuard использует отдельный интерфейс, именованные rules,
-  подтверждение и watchdog rollback;
-- оставляет AWG, VLESS/Xray и Mieru в состоянии prepare-only.
+- для WG/AWG использует отдельные интерфейсы и именованные rules;
+- для VLESS/Mieru использует отдельные loopback SOCKS-процессы;
+- у каждого runtime есть preflight, подтверждение и watchdog rollback;
+- не меняет DNS, default route и policy routing.
 
 ### `packages/netscope-wifi7-lab`
 
@@ -39,20 +51,32 @@ Read-only пакет лаборатории Wi‑Fi 7 для Xiaomi BE7000:
 
 ### `profiles/xiaomi-be7000-qwrt.json`
 
-Manifest целевой базы. Пока `flashable=false`, а build source/toolchain не
-закреплены контрольными суммами. Это предохранитель от публикации архива,
-который выглядит как прошивка, но не имеет воспроизводимого происхождения.
+Manifest целевой базы. `release_state=installable-overlay`, но `flashable=false`:
+overlay воспроизводим из опубликованных компонентов, бинарная QWRT-база — нет.
+
+### `overlay/install.sh` и `tools/build_overlay.py`
+
+Детерминированная сборка release archive, проверка target/base, SHA-256,
+автоматический USB backup и scoped rollback. Установщик не вызывает `mtd`,
+`sysupgrade` и не перезапускает network/firewall/VPN.
 
 ## Чего здесь пока нет
 
 - полного исходного дерева QWRT R26.02.02;
-- `luci-theme-netscope`;
-- публичного пакета NETSCOPE Traffic/Packet Lab;
-- runtime AWG/VLESS/Mieru с независимым rollback;
 - first-boot wizard и генерации уникальных device keys/CA;
+- переносимого Docker ARM64 runtime для HTTPS lab;
+- policy-routing слоя для подготовленных VLESS/Mieru SOCKS;
 - проверенного sysupgrade/factory image.
 
-## Как компонент станет частью образа
+## Как собрать текущий overlay
+
+```sh
+python tools/build_overlay.py
+```
+
+Подробная установка: [docs/INSTALL-OVERLAY.md](../docs/INSTALL-OVERLAY.md).
+
+## Как компонент станет частью flashable image
 
 1. Закрепить совместимую базу, toolchain и SHA-256 исходных архивов.
 2. Поместить пакет в `package/` этой базы без живых конфигов устройства.
@@ -69,7 +93,7 @@ make package/luci-app-netscope-setup/compile V=s
 make package/netscope-wifi7-lab/compile V=s
 ```
 
-Это команды сборки пакетов, а не готовой прошивки. `--force-depends`,
+Это команды сборки пакетов, а не готовой flashable-прошивки. `--force-depends`,
 `sysupgrade -F` и запись поверх неизвестной разметки не являются допустимым
 способом установки NETSCOPE.
 

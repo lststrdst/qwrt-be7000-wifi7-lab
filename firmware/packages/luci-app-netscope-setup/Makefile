@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-netscope-setup
-PKG_VERSION:=0.4.0
+PKG_VERSION:=0.5.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=lststrdst
@@ -19,9 +19,10 @@ endef
 
 define Package/luci-app-netscope-setup/description
   Authenticated Lua LuCI wizard for private WireGuard, AmneziaWG v1,
-  VLESS/Xray and Mieru configuration drafts. Plain WireGuard has an explicit,
-  transactional runtime with scoped firewall rules and no default-route change.
-  Requires writable storage mounted at /mnt/sda1; VPN binaries are optional.
+  VLESS/Xray and Mieru configurations. Every available runtime has explicit
+  preflight, activation, confirmation and protocol-scoped rollback. No profile
+  changes UCI, DNS or the default route. Requires writable /mnt/sda1 storage;
+  protocol binaries remain optional and are checked before activation.
 endef
 
 define Build/Compile

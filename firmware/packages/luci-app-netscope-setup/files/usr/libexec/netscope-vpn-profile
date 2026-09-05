@@ -1,126 +1,186 @@
 #!/bin/sh
-# Transactional, single-profile WireGuard runtime. Own objects only; no UCI/restarts.
+# Transactional NETSCOPE VPN runtimes. Own objects only; no UCI/restarts/default-route changes.
 set -eu
 umask 077
 
 ROOT=${NETSCOPE_VPN_ROOT:-/mnt/sda1/NETSCOPE}
 RUN=${NETSCOPE_VPN_RUN:-/tmp/netscope-setup/profile}
-IFACE=${NETSCOPE_VPN_IFACE:-nswg0}
-CH_IN=${NETSCOPE_VPN_CHAIN_IN:-NS_WG_INPUT}
-CH_FWD=${NETSCOPE_VPN_CHAIN_FWD:-NS_WG_FORWARD}
-CH_NAT=${NETSCOPE_VPN_CHAIN_NAT:-NS_WG_NAT}
 GUARD_SECONDS=${NETSCOPE_VPN_GUARD_SECONDS:-45}
 IP=${NETSCOPE_VPN_IP:-/sbin/ip}
 WG=${NETSCOPE_VPN_WG:-/usr/bin/wg}
+AWG=${NETSCOPE_VPN_AWG:-/usr/bin/awg}
+XRAY=${NETSCOPE_VPN_XRAY:-/usr/bin/xray}
+MIERU=${NETSCOPE_VPN_MIERU:-/usr/bin/mieru}
 IPT=${NETSCOPE_VPN_IPTABLES:-/usr/sbin/iptables}
 
 die(){ echo "netscope-vpn-profile: $*" >&2; exit 1; }
 valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
 valid_cidr(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$'; }
 valid_iface(){ printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9_.-]{1,15}$'; }
+valid_kind(){ case "$1" in wg|awg|vless|mieru) return 0;; *) return 1;; esac; }
+json_bool(){ [ "$1" = 1 ] && printf true || printf false; }
 ipt(){ "$IPT" -w 3 "$@"; }
-lock(){ mkdir -p "$RUN"; chmod 700 "$RUN"; mkdir "$RUN/lock" 2>/dev/null || die 'another profile operation is running'; }
-unlock(){ rmdir "$RUN/lock" 2>/dev/null || true; }
 
+set_kind(){
+    KIND=$1
+    valid_kind "$KIND" || die 'invalid profile kind'
+    STATE_DIR="$RUN/$KIND"
+    case "$KIND" in
+        wg) IFACE=${NETSCOPE_VPN_WG_IFACE:-nswg0};LINK_TYPE=wireguard;TOOL=$WG;CONF=server.conf;LOCAL_PORT=0;CH_IN=NS_WG_INPUT;CH_FWD=NS_WG_FORWARD;CH_NAT=NS_WG_NAT;;
+        awg) IFACE=${NETSCOPE_VPN_AWG_IFACE:-nsawg0};LINK_TYPE=amneziawg;TOOL=$AWG;CONF=server.conf;LOCAL_PORT=0;CH_IN=NS_AWG_INPUT;CH_FWD=NS_AWG_FORWARD;CH_NAT=NS_AWG_NAT;;
+        vless) IFACE='';LINK_TYPE='';TOOL=$XRAY;CONF=xray.json;LOCAL_PORT=${NETSCOPE_VPN_VLESS_PORT:-2081};CH_IN='';CH_FWD='';CH_NAT='';;
+        mieru) IFACE='';LINK_TYPE='';TOOL=$MIERU;CONF=mieru.json;LOCAL_PORT=${NETSCOPE_VPN_MIERU_PORT:-2082};CH_IN='';CH_FWD='';CH_NAT='';;
+    esac
+    # Read a WireGuard runtime created by NETSCOPE 0.4 before per-protocol state directories.
+    if [ "$KIND" = wg ] && [ ! -d "$STATE_DIR" ] && { [ -f "$RUN/active" ] || [ -f "$RUN/pending" ]; }; then STATE_DIR=$RUN; fi
+}
+
+lock(){ mkdir -p "$RUN";chmod 700 "$RUN";mkdir "$RUN/lock" 2>/dev/null || die 'another profile operation is running'; }
+unlock(){ rmdir "$RUN/lock" 2>/dev/null || true; }
+pid_alive(){
+    [ -f "$STATE_DIR/pid" ] || return 1
+    pid=$(cat "$STATE_DIR/pid" 2>/dev/null || true)
+    case "$pid" in ''|*[!0-9]*) return 1;; esac
+    kill -0 "$pid" 2>/dev/null
+}
+listener_up(){
+    port=$1
+    case "$port" in ''|*[!0-9]*) return 1;; esac
+    hex=$(printf '%04X' "$port")
+    awk -v p=":$hex" 'toupper($2) ~ p"$" && $4 == "0A" { found=1 } END { exit !found }' /proc/net/tcp /proc/net/tcp6 2>/dev/null
+}
 drop_jumps(){
+    [ -n "$IFACE" ] || return 0
     while ipt -t filter -C INPUT -j "$CH_IN" 2>/dev/null; do ipt -t filter -D INPUT -j "$CH_IN"; done
     while ipt -t filter -C FORWARD -j "$CH_FWD" 2>/dev/null; do ipt -t filter -D FORWARD -j "$CH_FWD"; done
     while ipt -t nat -C POSTROUTING -j "$CH_NAT" 2>/dev/null; do ipt -t nat -D POSTROUTING -j "$CH_NAT"; done
 }
+stop_process(){
+    pid_alive || return 0
+    pid=$(cat "$STATE_DIR/pid")
+    kill "$pid" 2>/dev/null || true
+    n=0;while kill -0 "$pid" 2>/dev/null && [ "$n" -lt 10 ]; do sleep 1;n=$((n+1));done
+    kill -9 "$pid" 2>/dev/null || true
+}
 cleanup(){
-    # Fail open: traffic-affecting jumps disappear before processes/interfaces.
+    # Fail open: packet-filter hooks disappear before interfaces/processes.
     drop_jumps
-    ipt -t filter -F "$CH_IN" 2>/dev/null || true
-    ipt -t filter -X "$CH_IN" 2>/dev/null || true
-    ipt -t filter -F "$CH_FWD" 2>/dev/null || true
-    ipt -t filter -X "$CH_FWD" 2>/dev/null || true
-    ipt -t nat -F "$CH_NAT" 2>/dev/null || true
-    ipt -t nat -X "$CH_NAT" 2>/dev/null || true
-    "$IP" link delete "$IFACE" 2>/dev/null || true
-    if [ -f "$RUN/guard.pid" ]; then
-        guard_pid=$(cat "$RUN/guard.pid" 2>/dev/null || true)
+    if [ -n "$IFACE" ]; then
+        ipt -t filter -F "$CH_IN" 2>/dev/null || true;ipt -t filter -X "$CH_IN" 2>/dev/null || true
+        ipt -t filter -F "$CH_FWD" 2>/dev/null || true;ipt -t filter -X "$CH_FWD" 2>/dev/null || true
+        ipt -t nat -F "$CH_NAT" 2>/dev/null || true;ipt -t nat -X "$CH_NAT" 2>/dev/null || true
+        "$IP" link delete "$IFACE" 2>/dev/null || true
+    else stop_process;fi
+    if [ -f "$STATE_DIR/guard.pid" ]; then
+        guard_pid=$(cat "$STATE_DIR/guard.pid" 2>/dev/null || true)
         case "$guard_pid" in ''|*[!0-9]*) ;; *) kill "$guard_pid" 2>/dev/null || true;; esac
     fi
-    rm -f "$RUN/pending" "$RUN/active" "$RUN/guard.pid" "$RUN/state"
+    rm -f "$STATE_DIR/pending" "$STATE_DIR/active" "$STATE_DIR/guard.pid" "$STATE_DIR/state" "$STATE_DIR/pid"
 }
 healthy(){
-    "$IP" link show dev "$IFACE" >/dev/null 2>&1 &&
-    "$WG" show "$IFACE" >/dev/null 2>&1 &&
-    ipt -t filter -C INPUT -j "$CH_IN" >/dev/null 2>&1 &&
-    ipt -t filter -C FORWARD -j "$CH_FWD" >/dev/null 2>&1 &&
-    ipt -t nat -C POSTROUTING -j "$CH_NAT" >/dev/null 2>&1
+    if [ -n "$IFACE" ]; then
+        "$IP" link show dev "$IFACE" >/dev/null 2>&1 &&
+        "$TOOL" show "$IFACE" >/dev/null 2>&1 &&
+        ipt -t filter -C INPUT -j "$CH_IN" >/dev/null 2>&1 &&
+        ipt -t filter -C FORWARD -j "$CH_FWD" >/dev/null 2>&1 &&
+        ipt -t nat -C POSTROUTING -j "$CH_NAT" >/dev/null 2>&1
+    else pid_alive && listener_up "$LOCAL_PORT";fi
 }
 status(){
-    active=false; pending=false; id=''
-    if [ -f "$RUN/active" ]; then active=true;id=$(cat "$RUN/active" 2>/dev/null || true); fi
-    if [ -f "$RUN/pending" ]; then pending=true;id=$(cat "$RUN/pending" 2>/dev/null || true); fi
+    active=0;pending=0;id=''
+    if [ -f "$STATE_DIR/active" ]; then active=1;id=$(cat "$STATE_DIR/active" 2>/dev/null || true);fi
+    if [ -f "$STATE_DIR/pending" ]; then pending=1;id=$(cat "$STATE_DIR/pending" 2>/dev/null || true);fi
     valid_id "$id" 2>/dev/null || id=''
-    ok=false;healthy && ok=true
-    printf '{"active":%s,"pending":%s,"healthy":%s,"id":"%s","interface":"%s"}\n' "$active" "$pending" "$ok" "$id" "$IFACE"
+    ok=0;healthy && ok=1
+    printf '{"active":%s,"pending":%s,"healthy":%s,"id":"%s","kind":"%s"' "$(json_bool "$active")" "$(json_bool "$pending")" "$(json_bool "$ok")" "$id" "$KIND"
+    [ -z "$IFACE" ] || printf ',"interface":"%s"' "$IFACE"
+    [ "$LOCAL_PORT" -eq 0 ] || printf ',"listen":"127.0.0.1","local_port":%s' "$LOCAL_PORT"
+    printf '}\n'
 }
-
-action=${1:-status}
-case "$action" in
-status) status ;;
-start)
-    id=${2:-}; address=${3:-}; network=${4:-}; port=${5:-}; shift 5 || true
-    valid_id "$id" || die 'invalid draft id';valid_cidr "$address" || die 'invalid server address';valid_cidr "$network" || die 'invalid tunnel network'
+begin_pending(){
+    id=$1
+    mkdir -p "$STATE_DIR";chmod 700 "$STATE_DIR"
+    [ ! -e "$STATE_DIR/active" ] && [ ! -e "$STATE_DIR/pending" ] || die 'this NETSCOPE protocol already has an active or pending profile'
+    printf '%s\n' "$id" >"$STATE_DIR/pending"
+    self=$0
+    ( sleep "$GUARD_SECONDS";[ ! -f "$STATE_DIR/pending" ] || "$self" rollback "$KIND" "$id" ) </dev/null >/dev/null 2>&1 &
+    echo $! >"$STATE_DIR/guard.pid"
+}
+start_wire(){
+    id=$1;address=$2;network=$3;port=$4;shift 4
+    valid_cidr "$address" || die 'invalid server address';valid_cidr "$network" || die 'invalid tunnel network'
     case "$port" in ''|*[!0-9]*) die 'invalid UDP port';; esac
     [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die 'invalid UDP port'
-    [ "$GUARD_SECONDS" -ge 2 ] && [ "$GUARD_SECONDS" -le 120 ] || die 'invalid rollback timeout'
-    valid_iface "$IFACE" || die 'invalid interface';[ -x "$IP" ] && [ -x "$WG" ] && [ -x "$IPT" ] || die 'required tools unavailable'
-    conf="$ROOT/config/setup/$id/server.conf";[ -f "$conf" ] && [ ! -L "$conf" ] || die 'private server configuration unavailable'
-    [ ! -e "$RUN/active" ] && [ ! -e "$RUN/pending" ] || die 'a NETSCOPE profile is already active or pending'
-    "$IP" link show dev "$IFACE" >/dev/null 2>&1 && die 'dedicated interface already exists; run recovery first'
+    valid_iface "$IFACE" || die 'invalid interface';[ -x "$IP" ] && [ -x "$TOOL" ] && [ -x "$IPT" ] || die 'required tools unavailable'
+    conf="$ROOT/config/setup/$id/$CONF";[ -f "$conf" ] && [ ! -L "$conf" ] || die 'private server configuration unavailable'
+    "$IP" link show dev "$IFACE" >/dev/null 2>&1 && die 'dedicated interface already exists; run scoped recovery first'
     wan=${NETSCOPE_VPN_WAN:-$("$IP" -4 route show default | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1);exit}}')}
     valid_iface "$wan" || die 'WAN interface could not be determined'
-    for route in "$@"; do valid_cidr "$route" || die 'invalid client route'; done
-    lock
-    trap 'cleanup;unlock' EXIT HUP INT TERM
-    printf '%s\n' "$id" >"$RUN/pending"
-    printf 'draft=%s\ninterface=%s\nwan=%s\naddress=%s\nport=%s\n' "$id" "$IFACE" "$wan" "$address" "$port" >"$RUN/state"
-    self=$0
-    ( sleep "$GUARD_SECONDS"; [ ! -f "$RUN/pending" ] || "$self" rollback "$id" ) </dev/null >/dev/null 2>&1 &
-    echo $! >"$RUN/guard.pid"
-    "$IP" link add "$IFACE" type wireguard
-    "$WG" setconf "$IFACE" "$conf"
+    for route in "$@";do valid_cidr "$route" || die 'invalid client route';done
+    begin_pending "$id"
+    printf 'draft=%s\nkind=%s\ninterface=%s\nwan=%s\naddress=%s\nport=%s\n' "$id" "$KIND" "$IFACE" "$wan" "$address" "$port" >"$STATE_DIR/state"
+    "$IP" link add "$IFACE" type "$LINK_TYPE"
+    "$TOOL" setconf "$IFACE" "$conf"
     "$IP" address add "$address" dev "$IFACE"
     "$IP" link set mtu 1420 up dev "$IFACE"
-    ipt -t filter -N "$CH_IN"
-    ipt -t filter -A "$CH_IN" -i "$wan" -p udp --dport "$port" -j ACCEPT
-    ipt -t filter -A "$CH_IN" -i "$IFACE" -p udp --dport 53 -j ACCEPT
-    ipt -t filter -A "$CH_IN" -i "$IFACE" -p tcp --dport 53 -j ACCEPT
-    ipt -t filter -A "$CH_IN" -j RETURN
-    ipt -t filter -N "$CH_FWD"
-    ipt -t nat -N "$CH_NAT"
-    for route in "$@"; do
+    ipt -t filter -N "$CH_IN";ipt -t filter -A "$CH_IN" -i "$wan" -p udp --dport "$port" -j ACCEPT
+    ipt -t filter -A "$CH_IN" -i "$IFACE" -p udp --dport 53 -j ACCEPT;ipt -t filter -A "$CH_IN" -i "$IFACE" -p tcp --dport 53 -j ACCEPT
+    ipt -t filter -A "$CH_IN" -j RETURN;ipt -t filter -N "$CH_FWD";ipt -t nat -N "$CH_NAT"
+    for route in "$@";do
         ipt -t filter -A "$CH_FWD" -i "$IFACE" -d "$route" -j ACCEPT
         ipt -t filter -A "$CH_FWD" -o "$IFACE" -s "$route" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
         ipt -t nat -A "$CH_NAT" -s "$network" -d "$route" -j MASQUERADE
     done
-    ipt -t filter -A "$CH_FWD" -j RETURN
-    ipt -t nat -A "$CH_NAT" -j RETURN
-    ipt -t filter -I INPUT 1 -j "$CH_IN"
-    ipt -t filter -I FORWARD 1 -j "$CH_FWD"
-    ipt -t nat -I POSTROUTING 1 -j "$CH_NAT"
+    ipt -t filter -A "$CH_FWD" -j RETURN;ipt -t nat -A "$CH_NAT" -j RETURN
+    ipt -t filter -I INPUT 1 -j "$CH_IN";ipt -t filter -I FORWARD 1 -j "$CH_FWD";ipt -t nat -I POSTROUTING 1 -j "$CH_NAT"
+}
+start_proxy(){
+    id=$1
+    [ -x "$TOOL" ] || die 'required proxy runtime unavailable'
+    conf="$ROOT/config/setup/$id/$CONF";[ -f "$conf" ] && [ ! -L "$conf" ] || die 'private client configuration unavailable'
+    listener_up "$LOCAL_PORT" && die 'dedicated loopback port is already in use'
+    begin_pending "$id"
+    printf 'draft=%s\nkind=%s\nlisten=127.0.0.1\nport=%s\n' "$id" "$KIND" "$LOCAL_PORT" >"$STATE_DIR/state"
+    mkdir -p "$STATE_DIR/home" "$STATE_DIR/cache";chmod 700 "$STATE_DIR/home" "$STATE_DIR/cache"
+    if [ "$KIND" = vless ]; then
+        "$TOOL" run -config "$conf" </dev/null >/dev/null 2>&1 &
+    else
+        MIERU_CONFIG_JSON_FILE="$conf" XDG_CACHE_HOME="$STATE_DIR/cache" HOME="$STATE_DIR/home" "$TOOL" run </dev/null >/dev/null 2>&1 &
+    fi
+    echo $! >"$STATE_DIR/pid"
+    n=0;while ! healthy && [ "$n" -lt 8 ];do sleep 1;n=$((n+1));done
+}
+
+action=${1:-status};shift || true
+case "$action" in
+status)
+    kind=${1:-wg};set_kind "$kind";status
+    ;;
+start)
+    # NETSCOPE 0.4 compatibility: start ID ADDRESS NETWORK PORT ROUTE...
+    if valid_kind "${1:-}";then kind=$1;shift;else kind=wg;fi
+    id=${1:-};shift || true;valid_id "$id" || die 'invalid draft id'
+    [ "$GUARD_SECONDS" -ge 2 ] && [ "$GUARD_SECONDS" -le 120 ] || die 'invalid rollback timeout'
+    set_kind "$kind";lock;trap 'cleanup;unlock' EXIT HUP INT TERM
+    if [ -n "$IFACE" ];then [ "$#" -ge 3 ] || die 'missing tunnel parameters';start_wire "$id" "$@";else [ "$#" -eq 0 ] || die 'unexpected proxy parameters';start_proxy "$id";fi
     healthy || die 'health check failed; rolled back'
     trap - EXIT HUP INT TERM;unlock;status
     ;;
 confirm)
-    id=${2:-};valid_id "$id" || die 'invalid draft id';lock
-    trap 'unlock' EXIT HUP INT TERM
-    [ "$(cat "$RUN/pending" 2>/dev/null || true)" = "$id" ] || die 'matching pending profile not found'
+    if valid_kind "${1:-}";then kind=$1;shift;else kind=wg;fi
+    id=${1:-};valid_id "$id" || die 'invalid draft id';set_kind "$kind";lock;trap 'unlock' EXIT HUP INT TERM
+    [ "$(cat "$STATE_DIR/pending" 2>/dev/null || true)" = "$id" ] || die 'matching pending profile not found'
     healthy || { cleanup;die 'profile became unhealthy before confirmation'; }
-    mv "$RUN/pending" "$RUN/active"
-    if [ -f "$RUN/guard.pid" ]; then guard_pid=$(cat "$RUN/guard.pid" 2>/dev/null || true);case "$guard_pid" in ''|*[!0-9]*) ;; *) kill "$guard_pid" 2>/dev/null || true;; esac;fi
-    rm -f "$RUN/guard.pid";trap - EXIT HUP INT TERM;unlock;status
+    mv "$STATE_DIR/pending" "$STATE_DIR/active"
+    if [ -f "$STATE_DIR/guard.pid" ];then guard_pid=$(cat "$STATE_DIR/guard.pid" 2>/dev/null || true);case "$guard_pid" in ''|*[!0-9]*) ;; *) kill "$guard_pid" 2>/dev/null || true;; esac;fi
+    rm -f "$STATE_DIR/guard.pid";trap - EXIT HUP INT TERM;unlock;status
     ;;
 stop|rollback)
-    expected=${2:-};[ -z "$expected" ] || valid_id "$expected" || die 'invalid draft id';lock
-    trap 'unlock' EXIT HUP INT TERM
-    current=$(cat "$RUN/active" 2>/dev/null || cat "$RUN/pending" 2>/dev/null || true)
-    [ -z "$expected" ] || [ -z "$current" ] || [ "$expected" = "$current" ] || die 'another profile owns the runtime'
+    if valid_kind "${1:-}";then kind=$1;shift;else kind=wg;fi
+    expected=${1:-};[ -z "$expected" ] || valid_id "$expected" || die 'invalid draft id';set_kind "$kind";lock;trap 'unlock' EXIT HUP INT TERM
+    current=$(cat "$STATE_DIR/active" 2>/dev/null || cat "$STATE_DIR/pending" 2>/dev/null || true)
+    [ -z "$expected" ] || [ -z "$current" ] || [ "$expected" = "$current" ] || die 'another profile owns this protocol runtime'
     cleanup;trap - EXIT HUP INT TERM;unlock;status
     ;;
-*) die 'usage: netscope-vpn-profile {status|start|confirm|stop|rollback}' ;;
+*) die 'usage: netscope-vpn-profile {status [kind]|start [kind] ...|confirm [kind] id|stop [kind] [id]|rollback [kind] [id]}' ;;
 esac

@@ -1,0 +1,143 @@
+/* NETSCOPE Dark — additive layer over the installed Design theme. */
+@font-face{font-family:Inter;src:url('./InterVariable.woff2') format('woff2');font-weight:100 900;font-display:swap}
+body.netscope[data-theme]{
+  --ns-bg:#1e1e1e;--ns-panel:#262626;--ns-sidebar:#2c2c2c;--ns-line:#424242;--ns-text:#f5f5f5;--ns-muted:#b5b5b5;--ns-accent:#cff7d3;
+  --bg:var(--ns-bg);--mainbg:var(--ns-bg);--bgwhite:var(--ns-bg);--textColor:var(--ns-text);--activeColor:var(--ns-accent);--activeBottom:var(--ns-accent) 2px solid;
+  --borderColor:var(--ns-line);--navbgColor:var(--ns-sidebar);--navBorder:1px solid var(--ns-line);--sectionbgColor:var(--ns-panel);--sectionbgColor2:var(--ns-panel);
+  --sectionShaddow:none;--sectionBorder:1px solid var(--ns-line);--sectiontabBorder:1px solid var(--ns-line);--sectionnodeBorder:1px solid var(--ns-line);--cbilineColor:1px solid #393939;
+  --tabbgColor:var(--ns-panel);--tabmenuBottom:1px solid var(--ns-line);--inputbgColor:#202020;--inputtextColor:var(--ns-text);--inputBorder:1px solid #555;
+  --mainleftbgColor:var(--ns-sidebar);--bttextColor:#172c1c;--badgebgColor:#383838;--badgeBorder:1px solid var(--ns-line);--progressbarColor:#454545;--progressbar:#9dcea5;--progressbartxtColor:#fff;
+  --logo_color:var(--ns-text);--alertColor:var(--ns-text);--alertBackground:#343434;--scrollbarColor:#5b5b5b;--ifaceboxBorderColor:#555;--ifaceboxFontColor:var(--ns-text);--liSelectedColor:#3a3a3a;
+  --vssrStatusColor:var(--ns-text);--vssrBoxShadow:none;--vssrBottom:0px;--commonRadius0:10px;--commonRadius1:7px;
+  color-scheme:dark;font-family:Inter,system-ui,sans-serif!important;font-size:14px;line-height:1.5;background:var(--ns-bg);color:var(--ns-text)
+}
+.netscope div,.netscope h1,.netscope h2,.netscope h3,.netscope h4,.netscope p,.netscope label,.netscope select,.netscope input,.netscope button{font-family:Inter,system-ui,sans-serif}
+.netscope h1,.netscope h2,.netscope h3,.netscope h4{text-transform:none;letter-spacing:-.025em;line-height:1.25}
+.netscope h2{font-size:28px;margin:0 0 20px;font-weight:650}
+.netscope h3{font-size:19px;font-weight:600}
+.netscope code,.netscope pre,.netscope textarea#syslog{font-family:ui-monospace,Consolas,monospace}
+.netscope a{transition:color .12s,background .12s}
+.netscope :focus-visible{outline:2px solid var(--ns-accent);outline-offset:3px}
+.netscope input:focus,.netscope select:focus,.netscope textarea:focus{box-shadow:0 0 0 3px #cff7d31a;border-color:#b2dbb6}
+.netscope input,.netscope select{font-size:14px;min-height:40px;border-radius:8px}
+.netscope input[type=checkbox],.netscope input[type=radio]{min-height:0;accent-color:#b2dbb6}
+.netscope textarea{background:#202020;color:var(--ns-text);border:1px solid #555;border-radius:8px;padding:12px;max-width:100%}
+.netscope input:disabled,.netscope select:disabled,.netscope button:disabled{opacity:.55;cursor:not-allowed}
+.netscope header{height:64px;box-shadow:none!important;border-bottom:1px solid #353535;left:252px;width:calc(100% - 252px);background:#1e1e1ef5}
+.netscope header>.container{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.netscope header .brand{font-size:13px!important;font-weight:500;letter-spacing:.04em;color:var(--ns-muted);line-height:64px;padding:0!important;position:static;width:auto;text-align:left;flex:1;min-width:0}
+.netscope header .pull-right{margin:0;display:flex;align-items:center;gap:12px;position:static}
+.netscope .navbar{display:none!important}
+.netscope .main{top:64px;min-height:calc(100vh - 64px);height:auto}
+.netscope .main-left{width:252px;top:0;bottom:0;height:100vh;padding:28px 18px;z-index:102;border-right:1px solid #383838;overflow:auto;scrollbar-width:thin}
+.netscope .main-right{width:calc(100% - 252px);height:auto;min-height:calc(100vh - 64px);border-left:0}
+.netscope #maincontent>.container{margin:32px;max-width:1600px;padding:0}
+.netscope .ns-sidebar-brand{padding:0 8px 25px}
+.netscope .ns-sidebar-brand .ns-brand-name{display:block;color:var(--ns-accent);font-size:22px;font-weight:750;letter-spacing:-.025em}
+.netscope .ns-sidebar-brand .ns-firmware-sidebar{display:block;color:var(--ns-muted);font-size:10px;letter-spacing:.06em;margin-top:7px;line-height:1.6}
+.netscope header .ns-firmware{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;letter-spacing:0;color:var(--ns-muted)}
+.netscope .ns-quick-duplicate{display:none!important}
+.netscope .ns-quick{display:grid;gap:5px;margin-bottom:28px}
+.netscope .ns-quick a{padding:11px 14px;border-radius:8px;font-size:13px;color:#d1d1d1}
+.netscope .ns-quick a:hover{background:#393939;color:#fff}
+.netscope .ns-quick a[aria-current=page]{background:var(--ns-accent);color:#172c1c;font-weight:600}
+.netscope .ns-search-wrap{padding:0 6px 10px}
+.netscope .ns-search-wrap label{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ns-muted);margin:0 0 10px}
+.netscope #ns-menu-search{width:100%;min-width:0;margin:0;font-size:12px;height:38px;min-height:38px;background:#252525;border-color:#484848;padding:8px 10px}
+.netscope #ns-search-result{font-size:11px;color:var(--ns-muted);display:block;margin-top:7px;min-height:0}
+.netscope .main>.main-left>.nav{width:100%;margin:0 0 30px;font-size:13px}
+.netscope .main>.main-left>.nav>.slide{padding:3px 0}
+.netscope .main>.main-left>.nav>.slide>a{font-size:13px;font-weight:550;padding:10px 12px;color:#ddd}
+.netscope .main>.main-left>.nav>.slide>a:before{display:none}
+.netscope .main>.main-left>.nav>.slide>.menu::after{font-size:12px;top:0;right:0}
+.netscope .main>.main-left>.nav>.slide>.menu:hover,.netscope .main>.main-left>.nav>.slide>.menu2:hover{background:#393939;color:#fff}
+.netscope .main>.main-left>.nav>.slide>.menu.active{background:#383838;color:var(--ns-accent)}
+.netscope .main>.main-left>.nav>.slide>.slide-menu{margin:3px 0 6px;padding-left:8px;border-left:1px solid #4a4a4a}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li{margin-top:1px;border-radius:7px}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li>a{font-size:12px;font-weight:450;line-height:1.45;margin:0;padding:8px 10px;text-transform:none;color:#c8c8c8}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li.active{background:var(--ns-accent)}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li.active>a{color:#172c1c;font-weight:600}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li:hover{background:#424242}
+.netscope .main>.main-left>.nav>.slide>.slide-menu>li:hover>a{color:#fff}
+.netscope .ns-filter-hidden{display:none!important}
+.netscope .ns-searching .slide-menu{display:block!important}
+.netscope .cbi-map-descr,.netscope .cbi-section-descr,.netscope .cbi-value-description{color:var(--ns-muted);line-height:1.6}
+.netscope .cbi-section{box-shadow:none;border-radius:10px;min-width:0}
+.netscope .cbi-section>legend,.netscope .panel-title{font-weight:600;letter-spacing:0!important}
+.netscope .cbi-section-table{border-spacing:0}
+.netscope .cbi-section-table th{font-weight:500;font-size:12px;color:#c6c6c6}
+.netscope .cbi-value-title{text-transform:none;font-size:13px}
+.netscope .cbi-value-field{min-width:0}
+.netscope .cbi-value-field>textarea{width:100%;max-width:550px}
+.netscope .cbi-button,.netscope .cbi-page-actions .btn{font-family:Inter,system-ui,sans-serif;font-weight:550;border-radius:8px;box-shadow:none!important;padding:0 15px;min-height:36px;text-transform:none!important}
+.netscope .cbi-button:not([class*=cbi-button-]):not([class*=cbi-input-]){background:#383838;color:#eee;border-color:#555}
+.netscope .cbi-button-link,.netscope .cbi-input-find,.netscope .cbi-button-add,.netscope .cbi-button-find,.netscope .cbi-input-reload,.netscope .cbi-button-reload{background:#383838!important;border-color:#555!important;color:#eee!important}
+.netscope .cbi-button-edit{background:var(--ns-accent)!important;color:#172c1c!important}
+.netscope .ifacebadge{color:#ddd}
+.netscope .cbi-button-apply,.netscope .cbi-button-save,.netscope .cbi-input-apply,.netscope .cbi-input-save{background:var(--ns-accent)!important;border-color:var(--ns-accent)!important;color:#172c1c!important}
+.netscope .cbi-button-reset,.netscope .cbi-input-reset{background:#383838!important;border-color:#555!important;color:#eee!important}
+.netscope .cbi-button-negative,.netscope .cbi-button-remove,.netscope .cbi-button-reset.important{background:#5f3033!important;border-color:#905054!important;color:#ffe2e2!important}
+.netscope .ns-password-save{display:flex;justify-content:flex-end;align-items:center;padding:16px 20px 10px;border-top:1px solid #424242}
+.netscope .ns-password-save .cbi-button{min-width:150px}
+.netscope .cbi-button-up,.netscope .cbi-button-down{font-family:icomoon!important}
+.netscope .cbi-tabmenu,.netscope .tabs{border-color:#424242}
+.netscope .cbi-tabmenu li a,.netscope .tabs li a{font-size:13px;font-weight:500;text-transform:none}
+.netscope .cbi-tabmenu li.cbi-tab a,.netscope .tabs li.active a{color:var(--ns-accent)}
+.netscope .alert-message,.netscope .errorbox{border-radius:9px;padding:14px 18px;line-height:1.6;font-size:14px}
+.netscope .errorbox,.netscope .alert-message.error{background:#432b2d;color:#ffd5d7;border:1px solid #825055}
+.netscope .alert-message.warning{background:#3c3525;color:#f4dfac;border:1px solid #756442}
+.netscope .alert-message.notice{background:#27372b;color:#cff7d3;border:1px solid #456c4d}
+.netscope .footer{visibility:visible;height:auto;min-height:70px;position:static;color:#888;padding:24px 32px;font-size:10px}
+.netscope .footer a{color:#aaa}
+.netscope .ns-footer-brand{margin-bottom:7px;color:var(--ns-muted)}
+.netscope .showSide{border:1px solid #555;background:#2c2c2c;color:#ddd;border-radius:6px;min-width:56px;min-height:36px;width:56px;height:36px;padding:0;font-family:Inter,system-ui,sans-serif!important;font-size:12px}
+.netscope .showSide:before{content:none}
+/* Login uses the original LuCI sysauth form. Never an imitation auth endpoint. */
+.netscope:not(.logged-in){background:#1e1e1e!important;text-align:left}
+.netscope:not(.logged-in) header,.netscope:not(.logged-in) .main-left{display:none}
+.netscope:not(.logged-in) .main{top:0;min-height:100vh;height:auto}
+.netscope:not(.logged-in) .main-right{float:none;width:100%;min-height:100vh}
+.netscope:not(.logged-in) #maincontent{min-height:calc(100vh - 72px);display:grid!important;place-items:center;height:auto!important;padding:64px 42px}
+.netscope:not(.logged-in) #maincontent>.container{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,420px);gap:100px;align-items:center;width:100%;max-width:1100px;margin:0;text-align:left}
+.netscope .ns-wordmark{font-size:26px;letter-spacing:-.04em;font-weight:750;color:var(--ns-accent);display:block;margin-bottom:80px}
+.netscope .ns-wordmark span{font-size:10px;letter-spacing:.14em;color:var(--ns-muted);font-weight:400;display:block;margin-top:6px}
+.netscope .ns-wordmark small{font-size:14px;font-weight:500;letter-spacing:0;white-space:nowrap;color:var(--ns-muted)}
+.netscope .ns-project-note{max-width:410px;margin-top:25px;font-size:12px;line-height:1.7;color:var(--ns-muted)}
+.netscope .ns-project-note p{margin:0 0 10px}
+.netscope .ns-project-note a{color:var(--ns-accent);text-decoration:underline;text-underline-offset:3px}
+.netscope .ns-eyebrow{font-size:10px;letter-spacing:.14em;color:var(--ns-muted);margin:0 0 20px}
+.netscope .ns-login-intro h1{font-size:clamp(38px,4vw,56px);letter-spacing:-.05em;font-weight:600;line-height:1.12;margin:0 0 23px;color:var(--ns-text)!important;border:0!important;padding:0!important}
+.netscope .ns-login-intro h1 span{color:var(--ns-accent)}
+.netscope .ns-login-copy{font-size:15px;line-height:1.7;color:var(--ns-muted);max-width:310px;margin-bottom:30px}
+.netscope .ns-login-tags{display:flex;flex-wrap:wrap;gap:8px}
+.netscope .ns-login-tags span{padding:7px 11px;font-size:11px;color:#bfc9bf;border:1px solid #454a45;border-radius:30px}
+.netscope:not(.logged-in) #maincontent form{background:#262626;border:1px solid #454545;border-radius:16px;padding:36px;box-shadow:0 24px 70px #0002;width:100%;min-width:0}
+.netscope:not(.logged-in) #maincontent form h2{font-size:28px;margin:0 0 10px;color:var(--ns-text)}
+.netscope:not(.logged-in) #maincontent .cbi-map-descr{font-size:13px;margin:0 0 26px}
+.netscope:not(.logged-in) #maincontent form .cbi-map{padding:0;margin:0;background:transparent}
+.netscope:not(.logged-in) #maincontent form fieldset{display:block!important;width:100%;padding:0!important;margin:0!important;background:transparent!important;overflow:visible;border:0}
+.netscope:not(.logged-in) #maincontent form .cbi-value{display:block;padding:0;margin:0 0 18px;background:transparent;border:0}
+.netscope:not(.logged-in) #maincontent form .cbi-value-title{display:block!important;float:none;width:auto;text-align:left;font-size:12px;color:#ddd;padding:0!important;margin:0 0 7px}
+.netscope:not(.logged-in) #maincontent form .cbi-value-field{display:block!important;margin:0;padding:0;width:100%}
+.netscope:not(.logged-in) #maincontent form input[type=text],.netscope:not(.logged-in) #maincontent form input[type=password]{min-width:0;width:100%;height:46px;padding:10px 12px;background-image:none;background:#202020;border:1px solid #555;margin:0;font-size:16px;line-height:24px}
+.netscope:not(.logged-in) #maincontent form .ns-login-actions{display:flex;gap:8px;margin-top:8px}
+.netscope:not(.logged-in) #maincontent form input[type=submit]{height:44px;flex:1;min-width:0;width:auto;margin:0!important}
+.netscope:not(.logged-in) #maincontent form input[type=reset],.netscope:not(.logged-in) #maincontent form button[type=reset]{display:none!important}
+.netscope .ns-login-note{font-size:11px;line-height:1.6;color:#aaa;margin-top:23px}
+.netscope .ns-http-note{font-size:10px;line-height:1.6;color:#d7bd89;margin-top:12px}
+.netscope:not(.logged-in) .footer{height:auto;text-align:center!important;padding:20px;min-height:60px;position:static}
+.netscope:not(.logged-in) .errorbox{margin:0 0 20px;font-size:12px}
+@media(min-width:993px){.netscope .main-left{width:252px!important}.netscope .showSide{display:none!important}}
+@media(max-width:992px){
+  .netscope header{left:0;width:100%}.netscope header>.container{padding:0 20px}.netscope .showSide{position:static;margin-right:12px}.netscope .main-left{width:0;top:64px;padding:0;z-index:105;height:calc(100vh - 64px)}
+  .netscope .main-left .ns-sidebar-brand{padding:25px 24px}.netscope .main-left .ns-quick,.netscope .main-left .ns-search-wrap,.netscope .main>.main-left>.nav{margin-left:16px;margin-right:16px;width:auto;min-width:220px}
+  .netscope .main-right{width:100%}.netscope #maincontent>.container{margin:24px 20px}.netscope h2{font-size:24px}
+  .netscope:not(.logged-in) #maincontent>.container{gap:40px;grid-template-columns:minmax(0,1fr) minmax(300px,380px)}.netscope .ns-wordmark{margin-bottom:50px}
+}
+@media(max-width:700px){
+  .netscope:not(.logged-in) #maincontent{padding:32px 20px}.netscope:not(.logged-in) #maincontent>.container{grid-template-columns:1fr;gap:30px;max-width:460px}
+  .netscope .ns-wordmark{margin-bottom:32px;font-size:23px}.netscope .ns-login-intro h1{font-size:36px}.netscope .ns-eyebrow{display:none}.netscope .ns-login-copy{font-size:13px;margin-bottom:0;max-width:none}.netscope .ns-login-tags{display:none}
+  .netscope:not(.logged-in) #maincontent form{padding:25px}.netscope:not(.logged-in) #maincontent form h2{font-size:25px}.netscope .ns-login-intro h1{margin-bottom:12px}
+  .netscope #maincontent>.container{margin:22px 14px}.netscope .cbi-page-actions{display:flex;flex-wrap:wrap;gap:6px}.netscope .cbi-value-field{max-width:100%}
+}
+@media(prefers-reduced-motion:reduce){.netscope *{transition:none!important;scroll-behavior:auto!important}}

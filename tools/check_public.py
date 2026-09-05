@@ -14,6 +14,10 @@ UUID_VALUE = re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][
 WINDOWS_HOME = re.compile(r"(?i)[A-Z]:\\Users\\[^\\\s]+")
 MAC = re.compile(r"(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b")
 IPV4 = re.compile(r"(?<![0-9.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9.])")
+SPECIAL_USE = tuple(ipaddress.ip_network(value) for value in (
+    "100.64.0.0/10", "169.254.0.0/16", "192.0.0.0/24", "198.18.0.0/15",
+    "224.0.0.0/4", "240.0.0.0/4",
+))
 
 
 def allowed_ip(value: str) -> bool:
@@ -23,6 +27,7 @@ def allowed_ip(value: str) -> bool:
         or ip.is_loopback
         or ip.is_unspecified
         or value == "1.1.1.1"
+        or any(ip in network for network in SPECIAL_USE)
         or ip in ipaddress.ip_network("192.0.2.0/24")
         or ip in ipaddress.ip_network("198.51.100.0/24")
         or ip in ipaddress.ip_network("203.0.113.0/24")
@@ -32,7 +37,7 @@ def allowed_ip(value: str) -> bool:
 def main() -> int:
     errors: list[str] = []
     for path in sorted(ROOT.rglob("*")):
-        if ".git" in path.parts or not path.is_file():
+        if any(part in {".git", "build", "dist"} for part in path.parts) or not path.is_file():
             continue
         relative = path.relative_to(ROOT)
         if relative.as_posix() == "tools/check_public.py":

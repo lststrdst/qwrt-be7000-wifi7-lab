@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+umask 077
+[ ! -L /tmp/netscope-capture ] || exit 1
+mkdir -p /tmp/netscope-capture
+child=''
+shutdown() {
+    trap - TERM INT HUP
+    : > /tmp/netscope-capture/shutdown
+    [ -z "$child" ] || wait "$child" || true
+    exit 0
+}
+trap shutdown TERM INT HUP
+/usr/libexec/netscope-capture daemon &
+child=$!
+wait "$child"

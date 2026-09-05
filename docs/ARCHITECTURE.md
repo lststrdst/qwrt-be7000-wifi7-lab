@@ -32,7 +32,7 @@ network/firewall, LuCI и системные сервисы. NETSCOPE показ
 ### 2. Продуктовый интерфейс
 
 NETSCOPE UI объединяет штатные страницы LuCI и собственные приложения в одной
-английской оболочке. Старые страницы QWRT остаются достижимыми: новый дизайн
+русской оболочке. Старые страницы QWRT остаются достижимыми: новый дизайн
 не должен скрывать аварийные или редкие настройки.
 
 ### 3. Наблюдаемость
@@ -56,9 +56,11 @@ VPN Quick setup разделяет подготовку и применение:
 5. Поддерживаемый runtime получает собственный интерфейс и собственные rules.
 6. Watchdog снимает только изменения этого runtime, если нет подтверждения.
 
-Plain WireGuard имеет отдельный экспериментальный runtime. AWG, VLESS/Xray и
-Mieru пока остаются prepare-only. Они не должны обозначаться в UI как активные
-до появления независимого rollback и интеграционных тестов.
+WG и AWG получают отдельные интерфейсы и только собственные firewall chains.
+VLESS/Xray и Mieru запускаются как независимые loopback SOCKS runtimes. У всех
+четырёх протоколов отдельное состояние, двухфазное подтверждение и watchdog;
+отсутствующий бинарник блокирует preflight. DNS, default route и policy routing
+этот мастер намеренно не меняет.
 
 ### 5. Лабораторные функции
 
@@ -70,7 +72,9 @@ activation, autostart и записи постоянного состояния.
 
 | Компонент | Публичный исходник | Изменяемое состояние | Безопасное состояние |
 |---|---|---|---|
-| VPN Quick setup | `firmware/packages/luci-app-netscope-setup` | приватные drafts и отдельный WG runtime | интерфейс выключен, собственные rules удалены |
+| NETSCOPE UI | `firmware/packages/luci-theme-netscope` | только LuCI theme/lang | исходные QWRT routes доступны |
+| Traffic/Capture | `firmware/packages/luci-app-netscope` | bounded PCAP и metadata на USB | Capture OFF, redirects удалены |
+| VPN Quick setup | `firmware/packages/luci-app-netscope-setup` | приватные drafts и протокольные runtimes | процессы/интерфейсы выключены, собственные rules удалены |
 | Wi‑Fi 7 Lab helper | `firmware/packages/netscope-wifi7-lab` | только render-файл в `/tmp` | никаких изменений радио |
 | Offline safety models | `src/netscope_firmware` | не выполняют I/O | детерминированный JSON-отчёт |
 | IoT monitor | `tools/netscope-iot-monitor` | кольцевые журналы на USB | процесс остановлен, сеть не изменена |
@@ -99,9 +103,9 @@ activation, autostart и записи постоянного состояния.
 - MLO не входит в boot path, пока не доказан аппаратный recovery.
 - Kernel hang никогда не обозначается как успешный software rollback.
 
-## Что ещё не опубликовано
+## Форма релиза
 
-Рабочая тема NETSCOPE UI и полный NETSCOPE Traffic пока находятся на тестовом
-роутере и должны быть перенесены в отдельные воспроизводимые LuCI-пакеты. Пока
-эти исходники не появились здесь и не проходят CI, скриншоты интерфейса не
-считаются firmware release.
+Опубликованный артефакт 0.5 — installable overlay: manifest и SHA-256 строятся
+из четырёх каталогов пакетов. Установщик проверяет модель/версию базы, требует
+USB, сохраняет заменяемые файлы, применяет только NETSCOPE scope и оставляет
+Capture/VPN выключенными. Полный flashable image остаётся отдельным этапом.

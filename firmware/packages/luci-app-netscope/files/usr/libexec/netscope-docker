@@ -1,0 +1,23 @@
+#!/bin/sh
+# Dedicated, host-network-only Docker runtime. Never use the system Docker config.
+set -eu
+ROOT=/mnt/sda1/NETSCOPE/runtime
+RUN=/tmp/netscope-docker
+BIN=$ROOT/docker-29.8.0/docker
+export PATH="$BIN:/usr/sbin:/usr/bin:/sbin:/bin"
+export DOCKER_HOST="unix://$RUN/docker.sock"
+case "${1:-}" in
+client) shift; exec "$BIN/docker" "$@" ;;
+serve)
+    lua -e 'local c=require"luci.model.netscope_capture"; local s=c.storage(true); assert(s.mounted and s.writable and not s.error and s.free>1000000000,"USB unavailable/full"); c.mkdir(c.ROOT.."/runtime"); c.mkdir("/tmp/netscope-docker")'
+    test -x "$BIN/dockerd"
+    # No bridge, NAT, policy edits, IP forwarding toggles or network listeners.
+    exec "$BIN/dockerd" --config-file "$ROOT/daemon.json" \
+      --host "$DOCKER_HOST" --data-root "$ROOT/data" --exec-root "$RUN/exec" \
+      --pidfile "$RUN/dockerd.pid" --group root --storage-driver overlay2 \
+      --exec-opt native.cgroupdriver=cgroupfs --bridge none --iptables=false \
+      --ip6tables=false --ip-forward=false --ip-masq=false --userland-proxy=false \
+      --log-level error --max-concurrent-downloads 1 --max-concurrent-uploads 1
+    ;;
+*) echo 'Usage: netscope-docker serve | client <docker arguments>' >&2; exit 2 ;;
+esac

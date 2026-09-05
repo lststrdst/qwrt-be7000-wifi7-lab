@@ -1,7 +1,7 @@
 {
   "project": "NETSCOPE",
   "repository": "lststrdst/netscope-firmware",
-  "project_version": "0.3.0",
+  "project_version": "0.5.0",
   "device": "Xiaomi BE7000 (RC06)",
   "base": "QWRT R26.02.02 / QSDK 12.5",
   "display_base": "QWRT R26.2.2",
@@ -10,8 +10,8 @@
   "kernel_observed": "5.4.213",
   "build_base_sha256": null,
   "build_base_revision": null,
-  "release_state": "source-preview",
+  "release_state": "installable-overlay",
   "flashable": false,
-  "packages": ["luci-app-netscope-setup", "netscope-wifi7-lab"],
+  "packages": ["luci-app-netscope", "luci-theme-netscope", "luci-app-netscope-setup", "netscope-wifi7-lab"],
   "missing_gates": ["pinned-compatible-build-base", "redistribution-and-source-compliance", "clean-image-build", "recovery-and-hardware-acceptance"]
 }

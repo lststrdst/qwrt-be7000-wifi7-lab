@@ -7,26 +7,26 @@ function M.safe(path)
     if type(path)~='string' or path:find('..',1,true) or path:sub(1,1)~='/' then return false end
     local p='';for v in path:gmatch('[^/]+')do p=p..'/'..v;local st=fs.lstat(p);if st and st.type=='lnk' then return false end end;return true
 end
-function M.mkdir(path)assert(M.safe(path),'Unsafe storage path');assert(fs.mkdirr(path,'700'));assert(fs.chmod(path,'700'));return path end
+function M.mkdir(path)assert(M.safe(path),'Небезопасный путь хранилища');assert(fs.mkdirr(path,'700'));assert(fs.chmod(path,'700'));return path end
 function M.atomic(path,value)
-    assert(M.safe(path) and M.safe(path..'.new'),'Unsafe file');local f=assert(io.open(path..'.new','wb'))
+    assert(M.safe(path) and M.safe(path..'.new'),'Небезопасный путь файла');local f=assert(io.open(path..'.new','wb'))
     assert(f:write(j.stringify(value)));assert(f:close());assert(fs.chmod(path..'.new','600'));assert(fs.rename(path..'.new',path))
 end
 function M.storage(test)
     local out={path=M.ROOT,mount=M.MOUNT,mounted=false,writable=false,free=0}
-    if not M.safe(M.ROOT) then out.error='Unsafe USB path';return out end
+    if not M.safe(M.ROOT) then out.error='Небезопасный путь USB';return out end
     for line in (M.read('/proc/mounts',65536) or ''):gmatch('[^\n]+')do
         local _,path,kind,opts=line:match('^(%S+) (%S+) (%S+) (%S+)')
         if path==M.MOUNT then out.mounted=true;out.filesystem=kind;out.writable=opts=='rw' or opts:match('^rw,')~=nil end
     end
-    if not out.mounted then out.error='USB is not mounted';return out end
+    if not out.mounted then out.error='USB-накопитель не подключён';return out end
     local st=fs.statvfs(M.MOUNT);if st then out.free=(st.bavail or 0)*(st.frsize or st.bsize or 4096) end
     if test and out.writable then
-        local path=M.MOUNT..'/.netscope-setup-write-'..n.getpid();if not M.safe(path) or fs.lstat(path) then out.error='Write-test path collision';return out end
+        local path=M.MOUNT..'/.netscope-setup-write-'..n.getpid();if not M.safe(path) or fs.lstat(path) then out.error='Конфликт пути проверки записи';return out end
         local f=io.open(path,'wb');out.writable=f~=nil
         if f then local wrote=f:write('NETSCOPE setup write test\n');local closed=f:close();fs.unlink(path);out.writable=wrote~=nil and closed~=nil end
     end
-    if not out.writable then out.error='USB is read-only or write test failed' end;return out
+    if not out.writable then out.error='USB доступен только для чтения или проверка записи завершилась ошибкой' end;return out
 end
 function M.valid_id(id)return type(id)=='string' and #id==26 and id:match('^%d%d%d%d%d%d%d%dT%d%d%d%d%d%d%-%x%x%x%x%x%x%x%x%x%x$')~=nil end
 function M.exec(argv,seconds)
@@ -39,7 +39,7 @@ function M.exec(argv,seconds)
         local s=r:read(8192);if s and #out<65536 then out=out..s:sub(1,65536-#out)end
         local got,why,code=n.waitpid(pid,'nohang')
         if got and got>0 then local tail=r:read(8192);if tail and #out<65536 then out=out..tail:sub(1,65536-#out)end;r:close();return why=='exited' and code==0,out end
-        if os.time()-started>(seconds or 4)then n.kill(pid,9);n.waitpid(pid);r:close();return false,'Operation timed out'end
+        if os.time()-started>(seconds or 4)then n.kill(pid,9);n.waitpid(pid);r:close();return false,'Истекло время выполнения операции'end
         n.nanosleep(0,50000000)
     end
 end

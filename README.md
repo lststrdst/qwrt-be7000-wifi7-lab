@@ -7,7 +7,7 @@
 [![NETSCOPE verification](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml/badge.svg)](https://github.com/lststrdst/netscope-firmware/actions/workflows/tests.yml)
 
 Я развиваю NETSCOPE как единый программный слой для своего Xiaomi BE7000
-(RC06): английская веб-панель, наблюдение за сетью, безопасная настройка VPN,
+(RC06): русская веб-панель, наблюдение за сетью, безопасная настройка VPN,
 восстановление, диагностика IoT и отдельная лаборатория Wi‑Fi 7/MLO.
 
 Основа проекта — QWRT R26.02.02 / QSDK 12.5. Происхождение базы всегда
@@ -15,10 +15,10 @@
 сохраняются. NETSCOPE не является официальным проектом QWRT, Xiaomi,
 Qualcomm или OpenWrt.
 
-> Сейчас это открытое дерево компонентов будущей прошивки, а не готовый
-> flashable image. В репозитории нет полного исходного дерева конкретной
-> бинарной сборки QWRT и пока нет публичного образа NETSCOPE. Рабочие функции,
-> лабораторные модели и планы ниже намеренно разделены.
+> NETSCOPE 0.5 выпускается как проверяемый установочный overlay для точной базы
+> QWRT R26.2.2: он ставит интерфейс и сервисы поверх работающего роутера, делает
+> резервную копию и не пишет NAND/UBI. Это ещё не factory/sysupgrade image — в
+> открытом доступе нет соответствующего полного дерева QWRT и toolchain.
 
 ## Зачем я это делаю
 
@@ -39,9 +39,9 @@ BE7000 является моим основным домашним шлюзом.
 
 | Подсистема | Зачем она нужна | Текущий статус |
 |---|---|---|
-| NETSCOPE UI | единая английская оболочка LuCI, вход, навигация и версия базы | работает на тестовом роутере; исходники темы ещё переносятся в это дерево |
-| NETSCOPE Traffic | устройства, conntrack, направления, порты, счётчики и управляемые PCAP-сессии | работает как локальный прототип; публичная упаковка не завершена |
-| VPN Quick setup | подготовка WG, AWG, VLESS/Xray и Mieru из вебки | исходники опубликованы; plain WG имеет отдельный watchdog runtime, остальные режимы prepare-only |
+| NETSCOPE UI | единая русская оболочка LuCI, вход, навигация и версия базы | исходники опубликованы в `luci-theme-netscope`; работает на тестовом роутере |
+| NETSCOPE Traffic | устройства, conntrack, направления, порты, счётчики и управляемые USB PCAP-сессии | исходники опубликованы в `luci-app-netscope`; Capture после установки выключен |
+| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray и Mieru из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; недостающий runtime честно блокирует запуск |
 | IoT monitor | доказательства потери Wi‑Fi, DHCP, DNS, WAN или облака | опубликован read-only инструмент |
 | Recovery | бэкапы, известный baseline и порядок возврата | инструкция опубликована; образ восстановления не распространяется |
 | Wi‑Fi 7 / MLO Lab | исследование заводской схемы 5G low + 5G high | только модели, render-only helper и тесты; live apply отсутствует |
@@ -98,6 +98,9 @@ BE7000 является моим основным домашним шлюзом.
 
 ```text
 firmware/
+  overlay/                            безопасный установщик поверх QWRT R26.2.2
+  packages/luci-app-netscope/         Traffic, PCAP и опциональный HTTPS lab
+  packages/luci-theme-netscope/       русская оболочка LuCI
   packages/luci-app-netscope-setup/   VPN Quick setup для LuCI
   packages/netscope-wifi7-lab/        read-only Wi-Fi 7 preflight/renderer
   profiles/                            профиль целевой базы и release gates
@@ -110,7 +113,7 @@ tests/                                 product, security и failure-path tests
 ```
 
 Подробно назначение слоёв описано в [архитектуре NETSCOPE](docs/ARCHITECTURE.md),
-а условия первого публичного образа — в
+а условия первого полноценного flashable-образа — в
 [release checklist](firmware/RELEASE-CHECKLIST.md).
 
 ## Локальная проверка
@@ -129,6 +132,8 @@ multi-link association клиента.
 
 ## Установка и выпуск
 
+- [Установка overlay NETSCOPE](docs/INSTALL-OVERLAY.md) — публичный путь без
+  записи разделов прошивки, с SHA-256, автоматическим backup и rollback.
 - [SSH через XMiR-Patcher](docs/INSTALL-SSH-XMIR.md) описывает подготовку
   доступа, а не обещает универсальную прошивку.
 - [firmware/README.md](firmware/README.md) объясняет, как компоненты должны
@@ -136,7 +141,9 @@ multi-link association клиента.
 - [RECOVERY.md](docs/RECOVERY.md) фиксирует безопасный порядок восстановления.
 - [SECURITY.md](SECURITY.md) перечисляет данные, которые нельзя публиковать.
 
-Первый образ появится только после закрепления исходной базы и toolchain,
+Публичный overlay собирается командой `python tools/build_overlay.py` только из
+файлов этого репозитория. Первый полноценный flashable image появится после
+закрепления исходной базы и toolchain,
 проверки NAND/UBI layout, чистого first boot, резервного слота, power-loss
 сценариев и возврата на известную рабочую сборку. `sysupgrade -F`, запись ART
 или перенос caldata с другого роутера не используются как обход этих gates.

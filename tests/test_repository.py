@@ -14,7 +14,7 @@ CONF_PATH = ROOT / "firmware/packages/netscope-wifi7-lab/files/etc/netscope/wifi
 
 
 def repository_files() -> list[Path]:
-    excluded = {".git", "__pycache__", ".pytest_cache"}
+    excluded = {".git", "__pycache__", ".pytest_cache", "dist", "build"}
     return [
         path
         for path in ROOT.rglob("*")
