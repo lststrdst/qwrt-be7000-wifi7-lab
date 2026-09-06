@@ -1,0 +1,86 @@
+LED Configuration
+AT Tools
+Adblock DNS List
+Administration
+Advanced
+AmneziaWG
+Anonymous User
+Apply
+Backup / Flash Firmware
+Base Setting
+CPU Freq
+Changes
+Configuration
+Connections
+Custom Rules
+DHCP and DNS
+Diagnostics
+Disk Man
+Dynamic DNS
+ECM ACC Settings
+Edit Blacklist
+Edit Configuration
+Edit Whitelist
+FTP Server
+Fan Control
+FileTransfer
+Firewall
+Free Memory
+General Settings
+Hostnames
+IPSec VPN Server
+IPTV RTP/UDP/RTSP
+Interface Info
+Interfaces
+Internet Access Schedule Control
+KMS Server
+Kernel Log
+L2TP Online Users
+Load
+Log
+Log Settings
+Logout
+Modem
+Mount Points
+NAS
+NETSCOPE
+Network
+Network Shares
+OpenVPN Server
+Overview
+Port Forwards
+Processes
+Query domains
+Realtime Graphs
+Reboot
+Revert
+Routes
+Save & Apply
+Scheduled Reboot
+Scheduled Tasks
+Services
+Signal Status
+Software
+Special Code
+Startup
+Static Routes
+Status
+System
+System Log
+TTYD Terminal
+Traffic
+Traffic Rules
+Turbo ACC Center
+UPnP
+USB Mobile Data
+USB Printer Server
+Users Manager
+VPN
+View Logfile
+Virtual Users
+Wake on LAN
+WireGuard Status
+Wireless
+XUPNP IPTV
+ZeroTier
+Быстрая настройка VPN

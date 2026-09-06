@@ -69,7 +69,17 @@
         'IPSec VPN Server':'Сервер IPSec VPN','OpenVPN Server':'Сервер OpenVPN','Network':'Сеть','Interfaces':'Интерфейсы',
         'Wireless':'Wi-Fi','DHCP and DNS':'DHCP и DNS','Hostnames':'Имена узлов','Static Routes':'Статические маршруты',
         'Firewall settings':'Настройки межсетевого экрана','Diagnostics':'Диагностика','ECM ACC Settings':'Настройки ускорения ECM',
-        'Turbo ACC Center':'Центр ускорения Turbo ACC','Logout':'Выйти'
+        'Turbo ACC Center':'Центр ускорения Turbo ACC','Logout':'Выйти','Advanced':'Дополнительно',
+        'Anonymous User':'Анонимный пользователь','Apply':'Применить','Base Setting':'Основные настройки','Changes':'Изменения',
+        'Configuration':'Конфигурация','Connections':'Соединения','Custom Rules':'Пользовательские правила',
+        'Edit Blacklist':'Изменить чёрный список','Edit Configuration':'Изменить конфигурацию','Edit Whitelist':'Изменить белый список',
+        'Firewall':'Межсетевой экран','General Settings':'Основные настройки','Interface Info':'Сведения об интерфейсе',
+        'L2TP Online Users':'Пользователи L2TP онлайн','Load':'Нагрузка','Log':'Журнал','Log Settings':'Настройки журнала',
+        'Port Forwards':'Перенаправление портов','Query domains':'Проверка доменов','Revert':'Отменить изменения',
+        'Save &#38; Apply':'Сохранить и применить','Save & Apply':'Сохранить и применить','Special Code':'Расширенная конфигурация',
+        'Traffic':'Трафик','Traffic Rules':'Правила трафика','UPnP':'UPnP','Users Manager':'Управление пользователями',
+        'View Logfile':'Просмотреть журнал','Virtual Users':'Виртуальные пользователи','XUPNP IPTV':'XUPNP IPTV','ZeroTier':'ZeroTier',
+        'NETSCOPE':'NETSCOPE','AmneziaWG':'AmneziaWG'
       };
       Array.prototype.slice.call(menu.querySelectorAll('a')).forEach(function (a) {
         var original = a.textContent.trim();

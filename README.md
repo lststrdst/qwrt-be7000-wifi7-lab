@@ -166,6 +166,7 @@ multi-link association клиента.
 - [Архитектура](docs/ARCHITECTURE.md)
 - [Текущее состояние и roadmap](docs/ROADMAP.md)
 - [Диагностика Discord Voice и HY2 A/B](docs/DISCORD-VOICE.md)
+- [Аудит меню, переводов и элементов LuCI](docs/LUCI-AUDIT.md)
 - [История изменений](CHANGELOG.md)
 - [OpenWrt Xiaomi BE7000 support work](https://github.com/openwrt/openwrt/pull/20604)
 - [Репозиторий NETSCOPE](https://github.com/lststrdst/netscope-firmware)

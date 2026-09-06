@@ -87,6 +87,34 @@ class FirmwareSourceTests(unittest.TestCase):
                 self.assertIn(f'id="{prefix}{control}"',view)
                 self.assertIn(f"el('{control}')",script)
 
+    def test_qwrt_menu_baseline_is_explicitly_russian_and_auditable(self):
+        theme = (THEME/'www/luci-static/netscope/netscope.js').read_text(encoding='utf-8')
+        titles = (ROOT/'tests/fixtures/qwrt-r26.2.2-menu-titles.txt').read_text(encoding='utf-8').splitlines()
+        keep = {'NETSCOPE', 'AmneziaWG', 'UPnP', 'XUPNP IPTV', 'ZeroTier', 'Быстрая настройка VPN'}
+        for title in titles:
+            if title not in keep:
+                self.assertRegex(theme, re.escape(repr(title)[1:-1]) + r"'\s*:", f'missing Russian menu mapping: {title}')
+        audit = (ROOT/'tools/luci-menu-audit.lua').read_text(encoding='utf-8')
+        self.assertIn('dispatcher.createtree()', audit)
+        self.assertIn('MISSING_TARGETS=', audit)
+        self.assertIn('DUPLICATE_SIBLING_LABELS=', audit)
+        for forbidden in ('uci:commit', 'os.execute', 'sys.call', 'reboot'):
+            self.assertNotIn(forbidden, audit)
+
+    def test_capture_integration_suite_is_isolated_and_mocked(self):
+        model = (CORE/'usr/lib/lua/luci/model/netscope_capture.lua').read_text(encoding='utf-8')
+        runner = (ROOT/'tests/on-router/run-capture-tests.sh').read_text(encoding='utf-8')
+        suite = (ROOT/'tests/on-router/test_capture.lua').read_text(encoding='utf-8')
+        for variable in ('NETSCOPE_CAPTURE_ROOT', 'NETSCOPE_CAPTURE_MOUNT', 'NETSCOPE_CAPTURE_RUN'):
+            self.assertIn("os.getenv('"+variable+"')", model)
+            self.assertIn(variable, runner)
+        self.assertIn('mktemp -d /tmp/netscope-capture-it.XXXXXX', runner)
+        self.assertIn('P.exec = function(argv)', suite)
+        self.assertIn('USB is not mounted', suite)
+        self.assertIn('P.cleanup() == true', suite)
+        self.assertIn('foreign.rules == 7', suite)
+        self.assertNotIn('os.execute', suite)
+
     def test_package_is_standalone_and_contains_no_credentials(self):
         expected = {
             'usr/lib/lua/luci/controller/netscope_setup.lua',

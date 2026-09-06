@@ -13,17 +13,20 @@
 - обезличенные VPN-примеры, recovery и SSH/XMiR документация;
 - проверка публичного дерева на секреты и vendor/device artifacts;
 - opt-in автозапуск HY2/voice с fail-open, телеметрия UDP/STUN и bounded history;
-- универсальный L2TP watchdog для PPP, маршрутов и MTU/MSS без глобального restart.
+- универсальный L2TP watchdog для PPP, маршрутов и MTU/MSS без глобального restart;
+- воспроизводимый read-only аудит 213 LuCI routes, целостности CBI/template и
+  полного русского отображения зафиксированного меню QWRT R26.2.2;
+- изолированные QWRT-интеграционные проверки Capture API, отказа USB и
+  идемпотентной очистки только NETSCOPE-owned iptables chains.
 
 ## Ближайшие задачи
 
-1. Добавить интеграционные тесты API, iptables cleanup и USB failure.
-2. Упаковать документированный ARM64 Docker runtime для HTTPS lab без vendor blobs.
-3. Проверить узкий Telegram/Discord HY2 voice route и новую телеметрию в
+1. Упаковать документированный ARM64 Docker runtime для HTTPS lab без vendor blobs.
+2. Проверить узкий Telegram/Discord HY2 voice route и новую телеметрию в
    длительных звонках; добавить график без расширения адресного охвата.
-4. Проверить AWG и Mieru на реальных внешних серверах; без бинарника их preflight заблокирован.
-5. Закрепить воспроизводимую QWRT/OpenWrt базу, toolchain и package manifest.
-6. Проверить чистый first boot, обновление и возврат на известную рабочую
+3. Проверить AWG и Mieru на реальных внешних серверах; без бинарника их preflight заблокирован.
+4. Закрепить воспроизводимую QWRT/OpenWrt базу, toolchain и package manifest.
+5. Проверить чистый first boot, обновление и возврат на известную рабочую
    сборку на отдельном стенде.
 
 ## Wi‑Fi 7 / MLO

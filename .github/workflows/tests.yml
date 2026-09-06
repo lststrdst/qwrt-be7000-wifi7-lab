@@ -33,6 +33,7 @@ jobs:
           sh -n firmware/packages/luci-app-netscope/files/usr/libexec/netscope-docker
           sh -n firmware/packages/luci-app-netscope/files/etc/init.d/netscope-capture
           sh -n firmware/packages/luci-app-netscope/files/etc/init.d/netscope-docker
+          sh -n tests/on-router/run-capture-tests.sh
           sh -n firmware/packages/netscope-wifi7-lab/files/usr/libexec/netscope-wifi7-lab
           sh -n tools/netscope-iot-monitor/netscope-iot-monitor.sh
           sh -n examples/l2tp/route-guard.sh

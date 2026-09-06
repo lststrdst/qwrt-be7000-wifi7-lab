@@ -1,5 +1,6 @@
 -- Shared lifecycle/storage contract for the existing authenticated Lua LuCI API.
-local M={VERSION='0.2.0',ROOT='/mnt/sda1/NETSCOPE',MOUNT='/mnt/sda1',RUN='/tmp/netscope-capture'}
+local M={VERSION='0.2.0',ROOT=os.getenv('NETSCOPE_CAPTURE_ROOT') or '/mnt/sda1/NETSCOPE',
+    MOUNT=os.getenv('NETSCOPE_CAPTURE_MOUNT') or '/mnt/sda1',RUN=os.getenv('NETSCOPE_CAPTURE_RUN') or '/tmp/netscope-capture'}
 local fs=require'nixio.fs';local n=require'nixio';local j=require'luci.jsonc'
 function M.read(path,limit) local f=io.open(path,'rb');if not f then return nil end;local s=f:read(limit or 1048576);f:close();return s end
 function M.json(path) if not M.safe(path) then return nil end;local ok,v=pcall(j.parse,M.read(path,2097152) or '');return ok and type(v)=='table' and v or nil end
