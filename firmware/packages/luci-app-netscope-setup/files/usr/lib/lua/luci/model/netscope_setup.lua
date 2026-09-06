@@ -309,7 +309,7 @@ function M.voice_update()
     local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error,'USB-накопитель недоступен')
     local ok,out=P.exec({updater},120);need(ok,'Наборы для звонков не обновлены: '..tostring(out):sub(1,240))
     local value=json.parse(out);need(type(value)=='table' and value.updated==true and tonumber(value.telegram_nets)>=6,'Обновлятор вернул некорректный результат')
-    value.note='Два независимых источника совпали; IPv4-сети Telegram сохранены приватно и ещё не направлены в HY2.';return value
+    value.note='Два независимых источника совпали; IPv4-сети Telegram сохранены приватно и ещё не направлены в голосовой VPN-канал.';return value
 end
 function M.voice_activate()
     local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
@@ -321,7 +321,7 @@ function M.voice_deactivate()
     local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
     local ok,out=P.exec({route,'stop'},12);need(ok,'Не удалось снять voice routing: '..tostring(out):sub(1,240))
     local value=json.parse(out);need(type(value)=='table' and not value.active,'Маршрутизация звонков вернула некорректное состояние после остановки')
-    value.note='HY2-маршрут звонков снят; пакеты снова обрабатываются обычными правилами роутера.';return value
+    value.note='Голосовой VPN-маршрут снят; пакеты снова обрабатываются обычными правилами роутера.';return value
 end
 function M.install_hysteria()
     local tools=M.tools();need(not tools.hysteria,'Hysteria 2 уже установлена')

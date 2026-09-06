@@ -50,6 +50,17 @@ function voice()
     if h.getenv('REQUEST_METHOD')~='GET' then h.status(405,'GET required');h.prepare_content('application/json');h.write_json({error='Требуется GET'});return end
     local ok,model=pcall(require,'luci.model.netscope_setup')
     local data=ok and model.voice_telemetry and model.voice_telemetry() or {available=false,active=false,healthy=false,history={},endpoints={}}
+    if ok and model.voice_status then
+        local good,state=pcall(model.voice_status)
+        if good and type(state)=='table' then
+            for key,value in pairs(state) do data[key]=value end
+            if state.active then
+                data.route=(state.mode=='mieru-tun' and 'Mieru reserve · nsmieru' or 'HY2 primary · nshy2')..' · mark 0x2 · table 101'
+            else
+                data.route='Voice policy выключен · обычная маршрутизация'
+            end
+        end
+    end
     h.prepare_content('application/json');h.write_json(data)
 end
 

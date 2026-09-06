@@ -1,6 +1,7 @@
 """Public-source guardrails, not a substitute for SDK or on-router testing."""
 import json
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,45 @@ class FirmwareSourceTests(unittest.TestCase):
         theme = (THEME/'www/luci-static/netscope/netscope.js').read_text(encoding='utf-8')
         self.assertIn("passwordActions.id = 'ns-password-save'", theme)
         self.assertIn("passwordSave.name = 'cbi.apply'", theme)
+
+    def test_netscope_voice_ui_uses_actual_primary_or_fallback_route(self):
+        controller = (THEME/'usr/lib/lua/luci/controller/netscope.lua').read_text(encoding='utf-8')
+        app_js = (CORE/'www/luci-static/resources/netscope/app.js').read_text(encoding='utf-8')
+        theme_js = (THEME/'www/luci-static/netscope/monitor.js').read_text(encoding='utf-8')
+        app_view = (CORE/'usr/lib/lua/luci/view/netscope.htm').read_text(encoding='utf-8')
+        theme_view = (THEME/'usr/lib/lua/luci/view/themes/netscope/monitor.htm').read_text(encoding='utf-8')
+        self.assertIn('model.voice_status', controller)
+        self.assertIn("state.mode=='mieru-tun'", controller)
+        self.assertIn('Mieru reserve · nsmieru', controller)
+        self.assertIn('HY2 primary · nshy2', controller)
+        for script in (app_js, theme_js):
+            self.assertIn("v.mode==='mieru-tun'", script)
+            self.assertIn("['Резерв Mieru',v.fallback_ready?'ГОТОВ':'НЕТ']", script)
+            self.assertIn("['Контрольный UDP'", script)
+            self.assertNotIn('Задержка HY2/STUN', script)
+        for view in (app_view, theme_view):
+            ids = re.findall(r'\bid="([^"]+)"', view)
+            self.assertEqual(len(ids), len(set(ids)), 'duplicate DOM id in NETSCOPE view')
+            self.assertIn('Голосовой UDP-маршрут', view)
+            self.assertIn('HY2 primary / Mieru reserve', view)
+            self.assertNotIn('Голос через HY2', view)
+            for button in re.findall(r'<button\b[^>]*>', view):
+                self.assertRegex(button, r'\btype="button"')
+
+    def test_owned_views_have_unique_controls_and_static_buttons_are_wired(self):
+        cases = (
+            (CORE/'usr/lib/lua/luci/view/netscope.htm', CORE/'www/luci-static/resources/netscope/app.js', ('nav-connections','nav-voice','nav-lab','pause','more')),
+            (THEME/'usr/lib/lua/luci/view/themes/netscope/monitor.htm', THEME/'www/luci-static/netscope/monitor.js', ('nav-connections','nav-voice','nav-lab','pause','more')),
+            (FILES/'usr/lib/lua/luci/view/netscope/setup.htm', FILES/'www/luci-static/netscope/setup.js', ('install-mieru','install-hev','install-hy2','voice-update','voice-start','voice-stop','voice-autostart')),
+        )
+        for view_path,script_path,controls in cases:
+            view=view_path.read_text(encoding='utf-8');script=script_path.read_text(encoding='utf-8')
+            ids=re.findall(r'\bid="([^"]+)"',view)
+            self.assertEqual(len(ids),len(set(ids)),f'duplicate DOM id in {view_path.name}')
+            prefix='ns-setup-' if view_path.name=='setup.htm' else 'ns-' if view_path.name=='monitor.htm' else ''
+            for control in controls:
+                self.assertIn(f'id="{prefix}{control}"',view)
+                self.assertIn(f"el('{control}')",script)
 
     def test_package_is_standalone_and_contains_no_credentials(self):
         expected = {
