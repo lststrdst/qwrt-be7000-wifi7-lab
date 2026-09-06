@@ -19,6 +19,17 @@ is not an official QWRT, Xiaomi, Qualcomm or OpenWrt project.
 > a rollback backup and never writes NAND/UBI. It is not yet a factory or
 > sysupgrade image because the matching complete QWRT source/toolchain is not public.
 
+## Interface preview
+
+Current production views rendered locally with **synthetic data**, not private
+home traffic or live VPN credentials. [Gallery and reproduction](docs/SCREENSHOTS.md).
+
+![NETSCOPE — connections and inspector, demo data](docs/screenshots/netscope-traffic-demo.jpg)
+
+![NETSCOPE — VPN Quick Setup, demo data](docs/screenshots/vpn-quick-setup-demo.jpg)
+
+[Implemented features and remaining work](docs/ROADMAP.md).
+
 ## Why I am building it
 
 The BE7000 is my primary home gateway. It carries direct internet traffic,
