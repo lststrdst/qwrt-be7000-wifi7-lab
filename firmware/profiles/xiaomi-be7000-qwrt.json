@@ -1,7 +1,7 @@
 {
   "project": "NETSCOPE",
   "repository": "lststrdst/netscope-firmware",
-  "project_version": "0.7.0-dev",
+  "project_version": "1.0.0-beta.1",
   "device": "Xiaomi BE7000 (RC06)",
   "base": "QWRT R26.02.02 / QSDK 12.5",
   "display_base": "QWRT R26.2.2",

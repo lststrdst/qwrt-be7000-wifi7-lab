@@ -95,6 +95,14 @@
 #netscope-setup #ns-setup-runtime-actions>span{display:grid;gap:8px;justify-items:start;font-size:12px;color:var(--qs-muted)}
 #netscope-setup .nsq-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;margin:24px 0;font-size:12px}
 #netscope-setup .nsq-footer a{color:var(--qs-muted)}
+#netscope-setup .nsq-import{margin-bottom:20px;border-color:#49644e}
+#netscope-setup .nsq-import>label,#netscope-setup #ns-setup-import-result>label{display:block;margin:16px 0 8px;font-size:13px;color:var(--qs-muted)}
+#netscope-setup .nsq-import textarea,#netscope-setup .nsq-import select{width:100%;max-width:100%;box-sizing:border-box;background:#1b221d;color:#eef5ef;border:1px solid #49604f;border-radius:8px;padding:12px;font:inherit;resize:vertical}
+#netscope-setup .nsq-import .ns-setup-button-row{margin-top:14px;align-items:center;gap:12px}
+#netscope-setup .nsq-file{display:grid;gap:6px;font-size:12px;min-width:0;max-width:100%;color:var(--qs-muted)}
+#netscope-setup .nsq-file input{width:100%;max-width:280px;min-width:0;font:inherit}
+#netscope-setup #ns-setup-import-result{margin-top:18px;border-top:1px solid #405246;padding-top:4px}
+@media(max-width:700px){#netscope-setup .nsq-import textarea,#netscope-setup .nsq-import select{font-size:16px}#netscope-setup .nsq-import .ns-setup-button-row>*{flex:1 1 100%}}
 @media(max-width:700px){#netscope-setup summary{min-height:44px;padding-block:8px}}
 @media(max-width:1180px){#netscope-setup .nsq-workspace{grid-template-columns:minmax(0,1fr)}#netscope-setup .nsq-aside{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);align-items:start}}
 @media(max-width:700px){#netscope-setup .nsq-workspace{gap:16px}#netscope-setup .nsq-aside{grid-template-columns:1fr}#netscope-setup .nsq-card,#netscope-setup #ns-setup-result{padding:20px 16px}#netscope-setup .nsq-nav{gap:0}#netscope-setup .nsq-nav a{padding:10px;font-size:12px}#netscope-setup .nsq-protocols button{flex:1 1 auto}#netscope-setup #ns-setup-tunnel{grid-template-columns:1fr}#netscope-setup .nsq-draft{grid-template-columns:1fr;padding:16px}#netscope-setup .nsq-draft .ns-setup-draft-actions{justify-content:stretch}#netscope-setup .ns-setup-draft-actions button{flex:1 1 180px}#netscope-setup #ns-setup-form input,#netscope-setup #ns-setup-form select,#netscope-setup #ns-setup-form textarea{font-size:16px}}

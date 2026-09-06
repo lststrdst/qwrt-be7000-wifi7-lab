@@ -38,7 +38,12 @@ function M.exec(argv,seconds)
     while true do
         local s=r:read(8192);if s and #out<65536 then out=out..s:sub(1,65536-#out)end
         local got,why,code=n.waitpid(pid,'nohang')
-        if got and got>0 then local tail=r:read(8192);if tail and #out<65536 then out=out..tail:sub(1,65536-#out)end;r:close();return why=='exited' and code==0,out end
+        if got and got>0 then
+            -- A short-lived child can exit with more than one chunk still in the pipe.
+            -- Drain it completely while retaining the same bounded output buffer.
+            while true do local tail=r:read(8192);if not tail or #tail==0 then break end;if #out<65536 then out=out..tail:sub(1,65536-#out)end end
+            r:close();return why=='exited' and code==0,out
+        end
         if os.time()-started>(seconds or 4)then n.kill(pid,9);n.waitpid(pid);r:close();return false,'Истекло время выполнения операции'end
         n.nanosleep(0,50000000)
     end

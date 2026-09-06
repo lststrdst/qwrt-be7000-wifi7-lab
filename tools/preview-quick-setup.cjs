@@ -39,9 +39,9 @@ const server = http.createServer((req,res) => {
   }
   if(url.pathname.startsWith('/luci-static/netscope/')){
     const name=path.basename(url.pathname);
-    const allow=['setup.js','setup.css','netscope.css','InterVariable.woff2'];
+    const allow=['setup.js','setup.css','import.js','netscope.css','InterVariable.woff2'];
     if(!allow.includes(name)){res.writeHead(404);res.end();return;}
-    const file=path.join(name.startsWith('setup.')?setup:theme,'www/luci-static/netscope',name);
+    const file=path.join(name.startsWith('setup.')||name==='import.js'?setup:theme,'www/luci-static/netscope',name);
     if(!fs.existsSync(file)){res.writeHead(404);res.end();return;}
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':name.endsWith('.js')?'text/javascript':'font/woff2');res.end(fs.readFileSync(file));return;
   }

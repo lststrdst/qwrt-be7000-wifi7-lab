@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation and explicit transactional activation.
-local M={VERSION='0.7.0-dev'}
+local M={VERSION='1.0.0-beta.1'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end

@@ -1,6 +1,6 @@
 # Установка NETSCOPE overlay на Xiaomi BE7000
 
-Публичный релиз 0.7-dev — это установочный слой для **точной QWRT R26.2.2**. Он
+Публичный релиз 1.0 beta 1 — это установочный слой для **точной QWRT R26.2.2**. Он
 не является `factory`/`sysupgrade`, не меняет загрузчик, NAND, UBI, ART или
 caldata. Установщик проверяет модель и базу, требует USB `/mnt/sda1`, сверяет
 SHA-256 и создаёт полный backup заменяемых файлов.
@@ -17,12 +17,17 @@ SHA-256 и создаёт полный backup заменяемых файлов.
 
 ## Сборка из исходников
 
+Готовый архив и его SHA-256 — в [GitHub Releases](https://github.com/lststrdst/netscope-firmware/releases).
+Не загружайте overlay в обновление прошивки LuCI/Xiaomi. Если собираете сами:
+
 ```sh
 python tools/build_overlay.py
+python tools/verify_overlay.py
 ```
 
 В `dist/` появятся архив и отдельный файл SHA-256. Архив содержит только файлы
-из `firmware/packages/*/files`, читаемый `manifest.json` и установщик.
+из `firmware/packages/*/files`, читаемый `manifest.json`, установщик, лицензию
+и эту инструкцию. Скрипт проверки повторяет сборку и сверяет все файлы и хэши.
 
 ## Передача и установка
 

@@ -11,6 +11,9 @@
 *.lua text eol=lf
 *.htm text eol=lf
 *.js text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+LICENSE text eol=lf
 Makefile text eol=lf
 firmware/packages/netscope-wifi7-lab/files/usr/libexec/* text eol=lf
 tools/netscope-iot-monitor/* text eol=lf

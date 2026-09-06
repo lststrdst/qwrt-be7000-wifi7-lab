@@ -14,10 +14,12 @@ The current base is QWRT R26.02.02 / QSDK 12.5. NETSCOPE keeps the origin
 visible as `Based on QWRT` and preserves upstream authorship and licensing. It
 is not an official QWRT, Xiaomi, Qualcomm or OpenWrt project.
 
-> NETSCOPE 0.7-dev is released as a verifiable installable overlay for the exact
+> **NETSCOPE 1.0 beta 1** is a verifiable installable overlay for the exact
 > QWRT R26.2.2 base. It installs the UI and services on a running router, creates
 > a rollback backup and never writes NAND/UBI. It is not yet a factory or
-> sysupgrade image because the matching complete QWRT source/toolchain is not public.
+> sysupgrade image: this repository has no pinned, validated matching QWRT build base/toolchain.
+> [Beta release](https://github.com/lststrdst/netscope-firmware/releases/tag/v1.0.0-beta.1)
+> · [Installation](docs/INSTALL-OVERLAY.md) · [Easy Setup guide (RU)](docs/EASY-SETUP.md)
 
 ## Interface preview
 

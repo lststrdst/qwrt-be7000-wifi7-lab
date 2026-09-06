@@ -37,7 +37,7 @@ function shell(content, page) {
   <body class="netscope logged-in" data-theme="dark"><aside class="gallery-sidebar"><b>NETSCOPE</b><small>(QWRT R26.2.2)<br>для Xiaomi BE7000 · by lststrdst</small><nav>${menu.map(([label,href]) => `<a href="${href}" ${href === page ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav><small>ВСЕ НАСТРОЙКИ</small><input aria-label="Поиск настроек" placeholder="Найти настройку…" disabled><p>Состояние</p><p>Система</p><p>Службы</p><p>VPN</p><p>Сеть</p></aside><header class="gallery-header">NETSCOPE (QWRT R26.2.2)</header><main class="gallery-main"><p class="gallery-demo">ДЕМО ИНТЕРФЕЙСА · адреса, устройства и показатели вымышлены · без подключения к роутеру</p>${content}</main></body></html>`;
 }
 const assets = new Map(['netscope.css','monitor.css','monitor.js','InterVariable.woff2'].map(name => [name,path.join(theme,'www/luci-static/netscope',name)]));
-for(const name of ['setup.css','setup.js'])assets.set(name,path.join(setup,'www/luci-static/netscope',name));
+for(const name of ['setup.css','setup.js','import.js'])assets.set(name,path.join(setup,'www/luci-static/netscope',name));
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   res.setHeader('Cache-Control','no-store');

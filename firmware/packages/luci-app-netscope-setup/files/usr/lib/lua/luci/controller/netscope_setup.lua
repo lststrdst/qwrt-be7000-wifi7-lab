@@ -4,6 +4,7 @@ function index()
     entry({'admin','services','netscope_setup','status'},call('read_status')).leaf=true
     entry({'admin','services','netscope_setup','drafts'},call('drafts')).leaf=true
     entry({'admin','services','netscope_setup','prepare'},post('prepare')).leaf=true
+    entry({'admin','services','netscope_setup','subscription'},post('subscription')).leaf=true
     entry({'admin','services','netscope_setup','preflight'},post('preflight')).leaf=true
     entry({'admin','services','netscope_setup','activate'},post('activate')).leaf=true
     entry({'admin','services','netscope_setup','deactivate'},post('deactivate')).leaf=true
@@ -41,6 +42,7 @@ function prepare()
     locked(function(h)local input={};for _,key in ipairs({'kind','endpoint','port','tunnel','lan','profile','mieru_uri','mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password','hy2_uri'}) do input[key]=h.formvalue(key) end
         return require('luci.model.netscope_setup').prepare(input) end)
 end
+function subscription()locked(function(h)return require('luci.model.netscope_subscription').fetch(h.formvalue('url'))end)end
 function preflight()locked(function(h)return require('luci.model.netscope_setup').preflight(h.formvalue('draft'))end)end
 function activate()locked(function(h)return require('luci.model.netscope_setup').activate(h.formvalue('draft'))end)end
 function deactivate()locked(function(h)return require('luci.model.netscope_setup').deactivate(h.formvalue('draft'))end)end

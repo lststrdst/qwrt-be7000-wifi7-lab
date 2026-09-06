@@ -15,8 +15,27 @@
  function action(label,handler){const button=document.createElement('button');button.type='button';button.className='cbi-button cbi-button-action';button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;error('');try{await handler(button);}catch(e){error(e.message);}finally{button.disabled=false;}});return button;}
  function protocolName(draft){return draft.protocol||({wg:'WireGuard',awg:'AmneziaWG',vless:'VLESS / Xray',mieru:'Mieru',hy2:'Hysteria 2'}[draft.kind])||'VPN';}
  const purpose={wg:'Удалённый доступ к домашней сети',awg:'Удалённый доступ домой через AmneziaWG v1',vless:'Исходящее подключение через VLESS / Xray',mieru:'Исходящий канал и UDP-резерв',hy2:'Hysteria 2 — отдельный UDP-канал'};
+ let imported=[];
+ function clearImport(){imported=[];el('import-source').value='';el('import-file').value='';el('import-nodes').replaceChildren();el('import-result').hidden=true;el('import-use').disabled=true;el('import-warnings').replaceChildren();}
+ function clearSecrets(){clearImport();el('profile').value='';el('hy2-uri').value='';el('mieru-uri').value='';el('mieru-user').value='';el('mieru-password').value='';}
+ el('import-clear').onclick=()=>{clearImport();el('import-status').textContent='Импорт очищен. Сохранённые профили не затронуты.';};
+ el('import-nodes').onchange=()=>{el('import-use').disabled=el('import-nodes').value==='';};
+ async function importSource(source){
+  if(busy)return;busy=true;el('import-parse').disabled=true;el('import-file').disabled=true;el('prepare').disabled=true;el('import-use').disabled=true;error('');
+  try{
+   const parser=window.NetscopeImport;if(!parser)throw Error('Модуль импорта не загрузился. Обновите страницу.');
+   const remote=parser.subscription(source);if(remote){if(!window.confirm('Загрузить подписку с указанного HTTPS-сервера через роутер? VPN и маршруты не изменятся.'))return;el('import-status').textContent='Загружаю подписку…';source=(await post('subscription',{url:remote})).content;}
+   const result=parser.parse(source);clearImport();imported=result.nodes;const select=el('import-nodes');select.append(new Option('Выберите узел…',''));imported.forEach((node,i)=>select.append(new Option(node.label+' · '+protocolName(node),String(i))));
+   list('import-warnings',result.warnings);el('import-result').hidden=false;el('import-status').textContent='Найдено узлов: '+imported.length+'. Выберите один для подготовки.';select.focus();
+  }catch(e){clearImport();el('import-status').textContent='Импорт не выполнен. Сеть не изменена.';error(e.message);}
+  finally{busy=false;el('import-parse').disabled=false;el('import-file').disabled=false;el('prepare').disabled=false;el('import-use').disabled=el('import-nodes').value==='';}
+ }
+ el('import-parse').onclick=()=>importSource(el('import-source').value);
+ el('import-file').onchange=async()=>{const file=el('import-file').files[0];if(!file)return;if(file.size>65535){error('Размер файла — не более 64 КБ');el('import-file').value='';return;}try{await importSource(await file.text());}catch(_){error('Не удалось прочитать файл');}};
+ el('import-use').onclick=()=>{if(busy||el('import-nodes').value==='')return;const node=imported[Number(el('import-nodes').value)];if(!node)return;clearSecrets();el('kind').value=node.kind;el('kind').onchange();el({vless:'profile',hy2:'hy2-uri',mieru:'mieru-uri'}[node.kind]).value=node.payload;el('import-status').textContent='Узел выбран. Нажмите «Подготовить конфигурацию» ниже — затем будет проверка перед включением.';el('prepare').scrollIntoView({block:'center'});el('prepare').focus();};
+ window.addEventListener('pagehide',clearSecrets);
  const scenarioButtons=Array.from(root.querySelectorAll('button[data-scenario]'));
- for(const button of scenarioButtons)button.addEventListener('click',()=>{if(busy)return;el('kind').value={home:'wg',vpn:'vless',voice:'hy2'}[button.dataset.scenario];el('kind').onchange();el('form').scrollIntoView({block:'start',behavior:'auto'});});
+ for(const button of scenarioButtons)button.addEventListener('click',()=>{if(busy)return;el('kind').value={home:'wg',vpn:'vless',voice:'hy2'}[button.dataset.scenario];el('kind').onchange();el(button.dataset.scenario==='home'?'form':'import').scrollIntoView({block:'start',behavior:'auto'});});
  const protocolButtons=Array.from(el('protocols').querySelectorAll('button[data-kind]'));
  for(const button of protocolButtons)button.addEventListener('click',()=>{if(busy)return;el('kind').value=button.dataset.kind;el('kind').onchange();});
  el('protocols').hidden=false;root.classList.add('nsq-enhanced');
@@ -42,6 +61,7 @@
   }
  }
  el('kind').onchange=()=>{const kind=el('kind').value;
+  el('import').hidden=['wg','awg'].includes(kind);
   for(const name of ['tunnel','vless','mieru','hy2']){const enabled=name==='tunnel'?(kind==='wg'||kind==='awg'):name===kind;el(name).hidden=!enabled;el(name).querySelectorAll('input,select,textarea').forEach(field=>field.disabled=!enabled);}
   for(const button of protocolButtons)button.setAttribute('aria-pressed',String(button.dataset.kind===kind));
   for(const button of scenarioButtons)button.setAttribute('aria-pressed',String(button.dataset.scenario===(['wg','awg'].includes(kind)?'home':kind==='hy2'?'voice':'vpn')));
@@ -49,7 +69,7 @@
   el('result').hidden=true;error('');
  };el('kind').onchange();
  el('form').onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;el('prepare').disabled=true;error('');el('result').hidden=true;el('kind').disabled=true;protocolButtons.forEach(button=>button.disabled=true);
-  try{const params=new URLSearchParams(new FormData(el('form')));params.set('kind',el('kind').value);params.set('token',root.dataset.token);const v=await api('prepare',params);el('profile').value='';el('mieru-uri').value='';el('mieru-password').value='';el('hy2-uri').value='';el('result-title').textContent=v.state==='TEMPLATE'?'Шаблон · требуется сервер':'Черновик подготовлен · не активен';el('note').textContent=v.note;
+  try{const params=new URLSearchParams(new FormData(el('form')));params.set('kind',el('kind').value);params.set('token',root.dataset.token);const v=await api('prepare',params);clearSecrets();el('result-title').textContent=v.state==='TEMPLATE'?'Шаблон · требуется сервер':'Черновик подготовлен · не активен';el('note').textContent=v.note;
    list('plan-list',v.planned_changes);list('check-list',v.checks);el('plan').hidden=!(v.planned_changes?.length||v.checks?.length);
    const downloads=el('downloads');downloads.replaceChildren();for(const file of [...(v.files||[]),'plan.json']){if(!['server.conf','client.conf','xray.json','mieru.json','hysteria.yaml','plan.json'].includes(file))continue;const a=document.createElement('a');a.textContent=file==='plan.json'?'Скачать обезличенный план':'Скачать '+file;a.href=root.dataset.api+'/download?'+new URLSearchParams({draft:v.id,file});a.download='';a.className='cbi-button cbi-button-link';downloads.append(a,document.createTextNode(' '));}el('result').hidden=false;await loadDrafts();}
   catch(e){error(e.message);}finally{busy=false;el('prepare').disabled=false;el('kind').disabled=false;protocolButtons.forEach(button=>button.disabled=false);}

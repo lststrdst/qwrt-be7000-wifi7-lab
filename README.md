@@ -15,10 +15,12 @@
 сохраняются. NETSCOPE не является официальным проектом QWRT, Xiaomi,
 Qualcomm или OpenWrt.
 
-> NETSCOPE 0.7-dev выпускается как проверяемый установочный overlay для точной базы
+> **NETSCOPE 1.0 beta 1** — проверяемый установочный overlay для точной базы
 > QWRT R26.2.2: он ставит интерфейс и сервисы поверх работающего роутера, делает
 > резервную копию и не пишет NAND/UBI. Это ещё не factory/sysupgrade image — в
-> открытом доступе нет соответствующего полного дерева QWRT и toolchain.
+> репозитории нет закреплённой и проверенной сборочной базы QWRT/toolchain.
+> [Скачать beta-релиз](https://github.com/lststrdst/netscope-firmware/releases/tag/v1.0.0-beta.1)
+> · [Установка и откат](docs/INSTALL-OVERLAY.md) · [Easy Setup](docs/EASY-SETUP.md)
 
 ## Как выглядит NETSCOPE
 

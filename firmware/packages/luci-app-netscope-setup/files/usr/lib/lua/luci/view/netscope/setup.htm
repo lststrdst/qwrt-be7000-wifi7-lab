@@ -1,5 +1,5 @@
 <%+header%>
-<link rel="stylesheet" href="/luci-static/netscope/setup.css?v=16">
+<link rel="stylesheet" href="/luci-static/netscope/setup.css?v=17">
 <section id="netscope-setup" data-api="<%=url('admin','services','netscope_setup')%>" data-token="<%=token%>">
 <nav class="nsq-nav" aria-label="Разделы быстрой настройки"><a href="#ns-setup-form">Новый профиль</a><a href="#ns-setup-profiles">Мои подключения</a><a href="#ns-setup-components">Компоненты</a></nav>
 <div class="nsq-heading"><p class="nsq-eyebrow">СЕТЬ / VPN QUICK SETUP</p><h2>Быстрая настройка VPN</h2><p>Создайте профиль. Проверьте настройки. Подключите, когда будете готовы.</p></div>
@@ -9,6 +9,16 @@
 <button type="button" data-scenario="voice" aria-pressed="false"><strong>Звонки и мессенджеры</strong><span>Отдельный канал для Telegram и Discord</span></button>
 </div>
 <div class="nsq-workspace"><div class="nsq-create">
+<section id="ns-setup-import" class="nsq-card nsq-import" hidden aria-labelledby="ns-setup-import-title">
+<p class="nsq-eyebrow">EASY SETUP / ДОБАВИТЬ ПОДКЛЮЧЕНИЕ</p><h3 id="ns-setup-import-title">Есть ссылка? Начните с неё.</h3>
+<p>Вставьте ссылку сервера или подписки. Мы найдём узлы — останется выбрать нужный.</p>
+<label for="ns-setup-import-source">Ссылка или содержимое конфигурации</label>
+<textarea id="ns-setup-import-source" rows="3" maxlength="65535" autocomplete="off" spellcheck="false" placeholder="Ссылка VLESS, HY2, Mieru, HTTPS-подписка или JSON из Happ"></textarea>
+<div class="ns-setup-button-row"><button id="ns-setup-import-parse" type="button" class="cbi-button cbi-button-apply">Загрузить и разобрать</button><label class="nsq-file">Или выберите файл<input id="ns-setup-import-file" type="file" accept=".json,.txt" aria-label="Импорт конфигурации из файла"></label></div>
+<p id="ns-setup-import-status" class="nsq-caption" role="status">До 64 КБ. Импорт не включает VPN и не меняет сеть.</p>
+<div id="ns-setup-import-result" hidden><label for="ns-setup-import-nodes">Какой узел добавить?</label><select id="ns-setup-import-nodes"></select><ul id="ns-setup-import-warnings" class="nsq-caption"></ul><div class="ns-setup-button-row"><button id="ns-setup-import-use" type="button" class="cbi-button cbi-button-apply" disabled>Выбрать узел →</button><button id="ns-setup-import-clear" type="button" class="cbi-button cbi-button-reset">Очистить импорт</button></div></div>
+<details class="nsq-details"><summary>Приватность и ограничения</summary><p>Файл и вставленный текст разбираются в браузере. По вашей команде роутер загружает HTTPS-подписку без перенаправлений; её адрес временно хранится в защищённом каталоге RAM. Подписка не сохраняется на USB. DNS, inbound и правила стороннего приложения не импортируются. При подготовке на роутер отправляется только выбранный узел.</p><p>VLESS и Mieru создают отдельного клиента: весь домашний интернет через них автоматически не направляется. Для HY2 голосовой маршрут включается отдельно. Полный мастер выборочной маршрутизации ещё разрабатывается.</p></details>
+</section>
 <form id="ns-setup-form" autocomplete="off">
 <div class="nsq-card"><h3>Новый профиль</h3><p class="nsq-steps"><b>01 Протокол</b><span>02 Конфигурация</span><span>03 Проверка</span></p>
 <div class="nsq-protocols" id="ns-setup-protocols" role="group" aria-label="Выбор протокола" hidden>
@@ -25,7 +35,7 @@
 <p class="cbi-map-descr">Скопируйте один узел Hysteria 2 из приложения и вставьте сюда. После подключения профиля включите голосовой маршрут в карточке справа.</p>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-hy2-uri">Узел Hysteria 2</label><div class="cbi-value-field"><textarea id="ns-setup-hy2-uri" name="hy2_uri" rows="6" spellcheck="false" maxlength="12000" placeholder="hysteria2://… / hy2://… или один outbound JSON"></textarea><p class="cbi-value-description">Принимается HY2-ссылка или один outbound JSON из Happ, не полная подписка. Поле очистится после подготовки.</p></div></div>
 </div>
-<div id="ns-setup-vless" hidden><div class="cbi-value"><label class="cbi-value-title" for="ns-setup-profile">Исходящий профиль VLESS в JSON</label><div class="cbi-value-field"><textarea id="ns-setup-profile" name="profile" rows="8" spellcheck="false" maxlength="12000" placeholder="Вставьте один исходящий объект VLESS для Xray"></textarea><p class="cbi-value-description">Вставьте один VLESS outbound JSON с TLS или Reality. Ссылки подписок пока не поддерживаются. Поле очистится после подготовки.</p></div></div></div>
+<div id="ns-setup-vless" hidden><details class="nsq-details" id="ns-setup-vless-details"><summary>Конфигурация VLESS · ручной ввод или проверка импорта</summary><div class="cbi-value"><label class="cbi-value-title" for="ns-setup-profile">Исходящий профиль VLESS в JSON</label><div class="cbi-value-field"><textarea id="ns-setup-profile" name="profile" rows="8" spellcheck="false" maxlength="12000" placeholder="Вставьте один исходящий объект VLESS для Xray"></textarea><p class="cbi-value-description">Ссылку или подписку добавьте через Easy Setup выше. Здесь можно проверить выбранный outbound с TLS/Reality. Поле очистится после подготовки.</p></div></div></details></div>
 <div id="ns-setup-mieru" hidden>
 <p class="cbi-map-descr">Вставьте ссылку своего сервера Mieru. Для резерва звонков нужен профиль с транспортом UDP.</p>
 <div class="cbi-value"><label class="cbi-value-title" for="ns-setup-mieru-uri">Ссылка Mieru</label><div class="cbi-value-field"><textarea id="ns-setup-mieru-uri" name="mieru_uri" rows="4" spellcheck="false" maxlength="12000" autocomplete="off" placeholder="mieru://… или mierus://…"></textarea><p class="cbi-value-description">Ссылка остаётся на вашем роутере. Поле очистится после подготовки.</p></div></div>
@@ -60,5 +70,6 @@
 <p class="nsq-caption">Установка компонентов не включает VPN. Готовность профиля повторно проверяется перед запуском.</p></details>
 <p class="nsq-footer"><% if require('nixio.fs').access('/usr/lib/lua/luci/controller/netscope.lua') then %><a href="<%=url('admin','status','netscope')%>">NETSCOPE · сертификаты и трафик</a><% end %><a href="https://github.com/lststrdst/netscope-firmware" target="_blank" rel="noopener noreferrer">Проект и инструкция по установке ↗</a></p>
 </section>
-<script defer src="/luci-static/netscope/setup.js?v=16"></script>
+<script defer src="/luci-static/netscope/import.js?v=17"></script>
+<script defer src="/luci-static/netscope/setup.js?v=17"></script>
 <%+footer%>

@@ -120,6 +120,7 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/lib/lua/luci/controller/netscope_setup.lua',
             'usr/lib/lua/luci/model/netscope_setup.lua',
             'usr/lib/lua/luci/model/netscope_setup_runtime.lua',
+            'usr/lib/lua/luci/model/netscope_subscription.lua',
             'usr/lib/lua/luci/view/netscope/setup.htm',
             'usr/libexec/netscope-vpn-profile',
             'usr/libexec/netscope-install-hysteria',
@@ -136,6 +137,7 @@ class FirmwareSourceTests(unittest.TestCase):
             'etc/init.d/netscope-voice',
             'etc/init.d/netscope-l2tp-watchdog',
             'www/luci-static/netscope/setup.js',
+            'www/luci-static/netscope/import.js',
             'www/luci-static/netscope/setup.css',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}

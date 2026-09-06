@@ -4,6 +4,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 import shutil
 import tarfile
 import tempfile
@@ -11,7 +12,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.7.0-dev"
+PROFILE = json.loads((ROOT / "firmware/profiles/xiaomi-be7000-qwrt.json").read_text(encoding="utf-8"))
+VERSION = PROFILE["project_version"]
+if not re.fullmatch(r"\d+\.\d+\.\d+(?:-beta\.\d+)?", VERSION) or PROFILE["flashable"] is not False:
+    raise SystemExit("invalid overlay version/profile; a flashable image needs its own validated builder")
 BASE = "QWRT R26.2.2"
 PACKAGES = (
     "luci-app-netscope",
@@ -27,6 +31,15 @@ def digest(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
     return value.hexdigest()
+
+
+def source_bytes(path: Path) -> bytes:
+    """All bundled payloads are UTF-8 source, never binaries or device dumps."""
+    raw = path.read_bytes().replace(b"\r\n", b"\n")
+    raw.decode("utf-8")
+    if b"\0" in raw:
+        raise SystemExit(f"binary source refused: {path.name}")
+    return raw
 
 
 def write_text_lf(path: Path, value: str, *, encoding: str = "utf-8") -> None:
@@ -49,7 +62,7 @@ def collect() -> list[dict[str, str]]:
             if target.startswith("etc/config/") or ".." in Path(target).parts:
                 raise SystemExit(f"unsafe target: {target}")
             mode = "0755" if target.startswith(("usr/libexec/", "etc/init.d/")) else "0644"
-            result[target] = {"target": target, "sha256": digest(path), "mode": mode, "component": package}
+            result[target] = {"target": target, "sha256": hashlib.sha256(source_bytes(path)).hexdigest(), "mode": mode, "component": package}
     return [result[name] for name in sorted(result)]
 
 
@@ -81,8 +94,9 @@ def main() -> int:
             source = ROOT / "firmware" / "packages" / entry["component"] / "files" / entry["target"]
             destination = stage / "payload" / entry["target"]
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
-        shutil.copyfile(ROOT / "firmware" / "overlay" / "install.sh", stage / "install.sh")
+            destination.write_bytes(source_bytes(source))
+        for source, name in [(ROOT / "firmware/overlay/install.sh", "install.sh"), (ROOT / "LICENSE", "LICENSE"), (ROOT / "docs/INSTALL-OVERLAY.md", "INSTALL-OVERLAY.md")]:
+            (stage / name).write_bytes(source_bytes(source))
         write_text_lf(stage / "manifest.json", json.dumps({
             "project": "NETSCOPE", "version": VERSION, "kind": "installable-overlay",
             "device": "Xiaomi BE7000", "base": BASE, "flashable": False,
@@ -98,6 +112,7 @@ def main() -> int:
             "Review manifest.json, then run: sh install.sh\n",
         )
         checked = [stage / "install.sh", stage / "manifest.json", stage / "manifest.tsv", stage / "README.txt"]
+        checked.extend([stage / "LICENSE", stage / "INSTALL-OVERLAY.md"])
         checked.extend(stage / "payload" / entry["target"] for entry in entries)
         write_text_lf(stage / "SHA256SUMS", "".join(
             f"{digest(path)}  {path.relative_to(stage).as_posix()}\n" for path in sorted(checked)

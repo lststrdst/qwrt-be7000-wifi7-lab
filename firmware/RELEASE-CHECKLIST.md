@@ -1,6 +1,6 @@
 # Перед первым flashable-образом NETSCOPE
 
-Публичный installable overlay 0.7-dev не пишет firmware-разделы и поэтому имеет
+Публичный installable overlay 1.0 beta не пишет firmware-разделы и поэтому имеет
 отдельный, уже реализованный контур: точная проверка QWRT R26.2.2, SHA-256,
 USB backup, scoped install/rollback и Capture/VPN OFF. Для factory/sysupgrade
 должны быть закрыты все пункты ниже; тест overlay не проверяет загрузку образа.
