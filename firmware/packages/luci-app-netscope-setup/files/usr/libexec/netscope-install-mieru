@@ -1,0 +1,60 @@
+#!/bin/sh
+# Install one pinned official Mieru ARM64 runtime on USB. Never starts it.
+set -eu
+umask 077
+
+VERSION=v3.36.1
+SHA256=b11bd3ac2ad5f7f948a49bb5ff58ef24fed309fbe7a48594755e60fe72eb2477
+BINARY_SHA256=0d27b450efc1970106c47ad3bd3bd7fdbfec56f22159382c92d270dd3feb3bfe
+URL=https://github.com/enfein/mieru/releases/download/v3.36.1/mieru_3.36.1_linux_arm64.tar.gz
+ROOT=/mnt/sda1/qwrt-services/mieru
+DEST=$ROOT/bin/mieru
+ARCHIVE=$ROOT/.mieru-$VERSION.$$.tar.gz
+STAGE=$ROOT/.mieru-$VERSION.$$
+
+die(){ echo "netscope-install-mieru: $*" >&2;exit 1; }
+cleanup(){ rm -f "$ARCHIVE" "$STAGE/mieru" 2>/dev/null || true;rmdir "$STAGE" 2>/dev/null || true; }
+trap cleanup EXIT HUP INT TERM
+
+case "$(uname -m)" in aarch64|arm64) :;; *) die 'unsupported architecture; aarch64 required';;esac
+grep -qE '^[^ ]+ /mnt/sda1 [^ ]+ rw(,| )' /proc/mounts || die 'writable /mnt/sda1 is required'
+for path in /mnt/sda1/qwrt-services "$ROOT" "$ROOT/bin";do [ ! -L "$path" ] || die 'symlink in destination path';done
+mkdir -p "$ROOT/bin";chmod 700 "$ROOT" "$ROOT/bin"
+command -v sha256sum >/dev/null 2>&1 || die 'sha256sum is required'
+command -v tar >/dev/null 2>&1 || die 'tar is required'
+
+if [ -f "$DEST" ] && [ ! -L "$DEST" ];then
+  installed_hash=$(sha256sum "$DEST" | awk '{print $1}')
+  [ "$installed_hash" = "$BINARY_SHA256" ] && { echo "MIERU_RUNTIME=READY VERSION=$VERSION";exit 0; }
+  die 'another Mieru runtime already exists; refusing to overwrite it'
+fi
+[ ! -e "$DEST" ] || die 'unsafe destination object'
+[ ! -e "$ARCHIVE" ] && [ ! -e "$STAGE" ] || die 'temporary path collision'
+
+free_kb=$(df -Pk /mnt/sda1 | awk 'NR==2 {print $4}')
+case "$free_kb" in ''|*[!0-9]*) die 'cannot determine free USB space';;esac
+[ "$free_kb" -ge 32768 ] || die 'at least 32 MiB free USB space is required'
+
+if command -v uclient-fetch >/dev/null 2>&1;then
+  uclient-fetch -q -O "$ARCHIVE" "$URL"
+elif command -v curl >/dev/null 2>&1;then
+  curl --fail --location --silent --show-error --output "$ARCHIVE" "$URL"
+elif command -v wget >/dev/null 2>&1;then
+  wget -q -O "$ARCHIVE" "$URL"
+else
+  die 'uclient-fetch, curl or wget is required'
+fi
+
+actual=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+[ "$actual" = "$SHA256" ] || die 'downloaded archive checksum mismatch'
+mkdir "$STAGE";chmod 700 "$STAGE"
+tar -xzf "$ARCHIVE" -C "$STAGE" mieru
+[ -f "$STAGE/mieru" ] && [ ! -L "$STAGE/mieru" ] || die 'archive did not contain a regular mieru binary'
+binary_hash=$(sha256sum "$STAGE/mieru" | awk '{print $1}')
+[ "$binary_hash" = "$BINARY_SHA256" ] || die 'extracted binary checksum mismatch'
+chmod 700 "$STAGE/mieru"
+version_output=$($STAGE/mieru version 2>&1) || die 'downloaded binary failed its version check'
+printf '%s\n' "$version_output" | grep -q '3.36.1' || die 'downloaded binary reported an unexpected version'
+mv "$STAGE/mieru" "$DEST";rm -f "$ARCHIVE";rmdir "$STAGE"
+trap - EXIT HUP INT TERM
+echo "MIERU_RUNTIME=INSTALLED VERSION=$VERSION"

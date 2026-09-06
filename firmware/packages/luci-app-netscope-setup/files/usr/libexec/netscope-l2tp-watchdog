@@ -1,0 +1,66 @@
+#!/bin/sh
+# Scoped PPP watchdog. Configuration is private and opt-in on the router.
+set -eu
+umask 077
+ROOT=${NETSCOPE_L2TP_ROOT:-/mnt/sda1/NETSCOPE}
+RUN=${NETSCOPE_L2TP_RUN:-/tmp/netscope-l2tp-watchdog}
+CONF=$ROOT/config/l2tp-watchdog.conf
+STATE=$RUN/status.json
+HISTORY=$ROOT/runtime/l2tp/watchdog.jsonl
+IP=${NETSCOPE_L2TP_IP:-/sbin/ip}
+IPT=${NETSCOPE_L2TP_IPTABLES:-/usr/sbin/iptables}
+CHAIN=NS_L2TP_MSS
+
+value(){ sed -n "s/^$1=//p" "$CONF" 2>/dev/null | head -n1; }
+valid_iface(){ printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9_.-]{1,15}$'; }
+valid_ip(){
+  printf '%s\n' "$1" | awk -F. 'NF!=4{exit 1}{for(i=1;i<=4;i++)if($i!~/^[0-9]+$/||$i+0>255)exit 1}'
+}
+valid_routes(){
+  [ -n "$1" ] && printf '%s\n' "$1" | grep -Eq '^[0-9./ ]+$' || return 1
+  for route in $1;do
+    address=${route%/*};bits=${route#*/};[ "$address" != "$route" ] && valid_ip "$address" || return 1
+    case "$bits" in ''|*[!0-9]*) return 1;;esac;[ "$bits" -le 32 ] || return 1
+  done
+}
+valid_exec(){ printf '%s\n' "$1" | grep -Eq '^/(usr/(bin|libexec)|mnt/sda1/qwrt-services/[A-Za-z0-9_.-]+)/(office-vpn-up|netscope-l2tp-reconnect)(\.sh)?$'; }
+load(){
+  [ "$(value enabled)" = 1 ] || return 1;IFACE=$(value interface);PROBE=$(value probe);ROUTES=$(value routes);RECONNECT=$(value reconnect);MTU=$(value mtu);MSS=$(value mss)
+  valid_iface "$IFACE" && valid_ip "$PROBE" && valid_routes "$ROUTES" && valid_exec "$RECONNECT" && [ -x "$RECONNECT" ] || return 1
+  case "$MTU:$MSS" in 1400:1360) :;; *) return 1;;esac
+}
+json(){ printf '%s' "$1" | sed 's/\\/\\\\/g;s/"/\\"/g'; }
+write_status(){ mkdir -p "$RUN";chmod 700 "$RUN";tmp=$STATE.new;printf '{"updated_at":%s,"enabled":%s,"healthy":%s,"interface":"%s","mtu":%s,"mss":%s,"failures":%s,"reconnects":%s,"message":"%s"}\n' "$(date +%s)" "$1" "$2" "${IFACE:-}" "${MTU:-0}" "${MSS:-0}" "${failures:-0}" "${reconnects:-0}" "$(json "$3")" >"$tmp";chmod 600 "$tmp";mv "$tmp" "$STATE"; }
+append_history(){ mkdir -p "$ROOT/runtime/l2tp";chmod 700 "$ROOT/runtime/l2tp";[ ! -f "$HISTORY" ] || [ "$(wc -c <"$HISTORY")" -lt 524288 ] || { rm -f "$HISTORY.1";mv "$HISTORY" "$HISTORY.1"; };printf '{"at":%s,"healthy":%s,"event":"%s"}\n' "$(date +%s)" "$1" "$(json "$2")" >>"$HISTORY";chmod 600 "$HISTORY"; }
+ipt(){ "$IPT" -w 3 "$@"; }
+remove_mss(){ while ipt -t mangle -D FORWARD -j "$CHAIN" 2>/dev/null;do :;done;ipt -t mangle -F "$CHAIN" 2>/dev/null||true;ipt -t mangle -X "$CHAIN" 2>/dev/null||true; }
+apply_mss(){
+  remove_mss;ipt -t mangle -N "$CHAIN";ipt -t mangle -A "$CHAIN" -o "$IFACE" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss "$MSS";ipt -t mangle -I FORWARD 1 -j "$CHAIN"
+}
+mss_healthy(){
+  ipt -t mangle -C FORWARD -j "$CHAIN" >/dev/null 2>&1 &&
+    ipt -t mangle -C "$CHAIN" -o "$IFACE" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss "$MSS" >/dev/null 2>&1
+}
+healthy(){
+  "$IP" link show dev "$IFACE" >/dev/null 2>&1 || return 1
+  "$IP" route get "$PROBE" 2>/dev/null | grep -Eq "dev $IFACE( |$)" || return 1
+  for prefix in $ROUTES;do "$IP" route show exact "$prefix" 2>/dev/null | grep -Eq "dev $IFACE( |$)" || return 1;done
+}
+repair_link(){
+  [ "$(cat "/sys/class/net/$IFACE/mtu" 2>/dev/null)" = "$MTU" ] || "$IP" link set dev "$IFACE" mtu "$MTU" >/dev/null 2>&1
+  mss_healthy || apply_mss
+}
+cleanup(){ remove_mss;flag=false;[ "$(value enabled)" = 1 ] && flag=true;write_status "$flag" false 'watchdog stopped; L2TP left untouched'; }
+daemon(){
+  failures=0;reconnects=0;mkdir -p "$RUN";chmod 700 "$RUN";trap 'cleanup;exit 0' INT TERM
+  while load;do
+    if healthy;then failures=0;repair_link || true;write_status true true 'PPP route, MTU and MSS are healthy'
+    else failures=$((failures+1));write_status true false 'PPP route check failed'
+      if [ "$failures" -ge 3 ];then append_history false 'reconnect requested after three failed checks';remove_mss;"$RECONNECT" >/dev/null 2>&1 || true;reconnects=$((reconnects+1));failures=0;sleep 120;continue;fi
+    fi
+    sleep 20
+  done
+  cleanup
+}
+status(){ if [ -f "$STATE" ];then cat "$STATE";else printf '{"updated_at":%s,"enabled":false,"healthy":false,"interface":"","mtu":0,"mss":0,"failures":0,"reconnects":0,"message":"watchdog is not configured"}\n' "$(date +%s)";fi; }
+case "${1:-status}" in daemon) daemon;; status) status;; cleanup) failures=0;reconnects=0;IFACE='';MTU=0;MSS=0;cleanup;; *) echo 'usage: netscope-l2tp-watchdog {daemon|status|cleanup}' >&2;exit 2;;esac

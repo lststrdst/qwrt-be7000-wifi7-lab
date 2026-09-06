@@ -10,10 +10,14 @@ function index()
     entry({'admin','services','netscope_setup','delete'},post('delete')).leaf=true
     entry({'admin','services','netscope_setup','download'},call('download')).leaf=true
     entry({'admin','services','netscope_setup','install_hysteria'},post('install_hysteria')).leaf=true
+    entry({'admin','services','netscope_setup','install_mieru'},post('install_mieru')).leaf=true
     entry({'admin','services','netscope_setup','voice_status'},call('voice_status')).leaf=true
     entry({'admin','services','netscope_setup','voice_update'},post('voice_update')).leaf=true
     entry({'admin','services','netscope_setup','voice_activate'},post('voice_activate')).leaf=true
     entry({'admin','services','netscope_setup','voice_deactivate'},post('voice_deactivate')).leaf=true
+    entry({'admin','services','netscope_setup','voice_telemetry'},call('voice_telemetry')).leaf=true
+    entry({'admin','services','netscope_setup','voice_autostart'},post('voice_autostart')).leaf=true
+    entry({'admin','services','netscope_setup','l2tp_status'},call('l2tp_status')).leaf=true
 end
 local function headers()
     local h=require'luci.http';h.header('Cache-Control','no-store');h.header('X-Content-Type-Options','nosniff');h.header('Referrer-Policy','no-referrer');h.header('X-Frame-Options','SAMEORIGIN');return h
@@ -41,10 +45,14 @@ function activate()locked(function(h)return require('luci.model.netscope_setup')
 function deactivate()locked(function(h)return require('luci.model.netscope_setup').deactivate(h.formvalue('draft'))end)end
 function delete()locked(function(h)return require('luci.model.netscope_setup').delete(h.formvalue('draft'))end)end
 function install_hysteria()locked(function()return require('luci.model.netscope_setup').install_hysteria()end)end
+function install_mieru()locked(function()return require('luci.model.netscope_setup').install_mieru()end)end
 function voice_status()local h=headers();h.prepare_content('application/json');h.write_json(require('luci.model.netscope_setup').voice_status())end
 function voice_update()locked(function()return require('luci.model.netscope_setup').voice_update()end)end
 function voice_activate()locked(function()return require('luci.model.netscope_setup').voice_activate()end)end
 function voice_deactivate()locked(function()return require('luci.model.netscope_setup').voice_deactivate()end)end
+function voice_telemetry()local h=headers();h.prepare_content('application/json');h.write_json(require('luci.model.netscope_setup').voice_telemetry())end
+function voice_autostart()locked(function(h)return require('luci.model.netscope_setup').voice_autostart(h.formvalue('enabled')=='1')end)end
+function l2tp_status()local h=headers();h.prepare_content('application/json');h.write_json(require('luci.model.netscope_setup').l2tp_status())end
 function download()
     local h=headers();if h.getenv('REQUEST_METHOD')~='GET' then h.status(405,'Требуется GET');return end
     local ok,path=pcall(require('luci.model.netscope_setup').download,h.formvalue('draft'),h.formvalue('file'))

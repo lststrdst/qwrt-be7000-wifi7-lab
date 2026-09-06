@@ -1,7 +1,15 @@
 #!/usr/bin/lua
--- End-to-end SOCKS5 UDP probe for an already running local Hysteria 2 client.
+-- End-to-end SOCKS5 UDP probe for an already running local proxy client.
 -- The STUN response is validated in memory and never printed or stored.
 local n=require'nixio'
+local socks_port=tonumber(os.getenv('NETSCOPE_SOCKS_PORT') or '2083')
+if not socks_port or socks_port<1 or socks_port>65535 or socks_port%1~=0 then
+    io.stderr:write('netscope-hy2-udp-probe: invalid local SOCKS port\n');os.exit(1)
+end
+local function now()
+    local sec,usec=n.gettimeofday()
+    return tonumber(sec or 0)+(tonumber(usec or 0)/1000000)
+end
 local function fail() io.stderr:write('netscope-hy2-udp-probe: no valid UDP reply\n');os.exit(1) end
 local function exact(sock,want)
     local out=''
@@ -14,7 +22,7 @@ local function sendall(sock,data)
 end
 local tcp=n.socket('inet','stream');if not tcp then fail() end
 tcp:setopt('socket','sndtimeo',5);tcp:setopt('socket','rcvtimeo',5)
-if not tcp:connect('127.0.0.1',2083) then fail() end
+if not tcp:connect('127.0.0.1',socks_port) then fail() end
 sendall(tcp,string.char(5,1,0));local hello=exact(tcp,2)
 if hello~=string.char(5,0) then fail() end
 sendall(tcp,string.char(5,3,0,1,0,0,0,0,0,0));local head=exact(tcp,4)
@@ -36,7 +44,9 @@ if not udp:connect(relay,relay_port) then fail() end
 local host='stun.cloudflare.com';local cookie=string.char(0x21,0x12,0xa4,0x42)
 local stun=string.char(0,1,0,0)..cookie..string.rep(string.char(0x5a),12)
 local frame=string.char(0,0,0,3,#host)..host..string.char(0x0d,0x96)..stun
+local started=now()
 if not udp:send(frame) then fail() end
 local response=udp:recv(2048);udp:close();tcp:close()
 if not response or #response<30 or not response:find(string.char(1,1,0),1,true) or not response:find(cookie,1,true) then fail() end
-print('{"udp":true,"target":"public-stun"}')
+local latency=math.max(0,math.floor((now()-started)*1000+0.5))
+print(string.format('{"udp":true,"target":"public-stun","latency_ms":%d}',latency))

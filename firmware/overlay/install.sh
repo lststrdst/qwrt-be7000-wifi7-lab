@@ -66,7 +66,7 @@ if test -x /usr/libexec/netscope-capture && /usr/libexec/netscope-capture status
     die 'turn NETSCOPE Capture off before updating'
 fi
 if test -x /usr/libexec/netscope-vpn-profile; then
-    for kind in wg awg vless mieru; do
+    for kind in wg awg vless mieru hy2; do
         if /usr/libexec/netscope-vpn-profile status "$kind" 2>/dev/null | grep -Eq '"(active|pending)":true'; then
             die "stop the NETSCOPE $kind profile before updating"
         fi

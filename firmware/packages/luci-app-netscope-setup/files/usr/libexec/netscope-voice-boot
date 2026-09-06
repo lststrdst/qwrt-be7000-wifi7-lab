@@ -1,0 +1,42 @@
+#!/bin/sh
+# Opt-in HY2/voice boot reconciler. fail-open: any failure leaves ordinary routing in place.
+set -eu
+umask 077
+ROOT=${NETSCOPE_VOICE_ROOT:-/mnt/sda1/NETSCOPE}
+RUN=${NETSCOPE_VOICE_BOOT_RUN:-/tmp/netscope-voice-boot}
+CONF=$ROOT/config/voice/autostart.conf
+MANAGER=${NETSCOPE_VPN_MANAGER:-/usr/libexec/netscope-vpn-profile}
+ROUTE=${NETSCOPE_VOICE_ROUTE:-/usr/libexec/netscope-voice-route}
+
+valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
+profile(){ sed -n 's/^profile=//p' "$CONF" 2>/dev/null | head -n1; }
+enabled(){ [ "$(sed -n 's/^enabled=//p' "$CONF" 2>/dev/null | head -n1)" = 1 ]; }
+active_id(){ "$MANAGER" status hy2 2>/dev/null | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'; }
+is_true(){ printf '%s' "$1" | grep -q "\"$2\":true"; }
+cleanup(){ "$ROUTE" stop >/dev/null 2>&1 || true;[ ! -f "$RUN/owned-profile" ] || { id=$(cat "$RUN/owned-profile" 2>/dev/null || true);valid_id "$id" && "$MANAGER" stop hy2 "$id" >/dev/null 2>&1 || true; };rm -f "$RUN/owned-profile"; }
+configure(){
+  id=${2:-};valid_id "$id" || { echo 'invalid HY2 profile id' >&2;exit 2; }
+  [ -f "$ROOT/config/setup/$id/hysteria.yaml" ] && [ ! -L "$ROOT/config/setup/$id/hysteria.yaml" ] || { echo 'HY2 profile unavailable' >&2;exit 2; }
+  mkdir -p "$ROOT/config/voice";chmod 700 "$ROOT/config/voice";tmp=$CONF.new;printf 'enabled=1\nprofile=%s\n' "$id" >"$tmp";chmod 600 "$tmp";mv "$tmp" "$CONF"
+}
+reconcile(){
+  enabled || return 1;id=$(profile);valid_id "$id" || return 1
+  state=$($MANAGER status hy2 2>/dev/null || true);live=$(active_id)
+  if [ -n "$live" ] && [ "$live" != "$id" ];then "$ROUTE" stop >/dev/null 2>&1 || true;logger -t netscope-voice 'autostart did not replace another active HY2 profile';return 1;fi
+  if ! is_true "$state" active || ! is_true "$state" healthy;then
+    if [ -f "$RUN/owned-profile" ] && [ "$live" = "$id" ];then "$MANAGER" stop hy2 "$id" >/dev/null 2>&1 || true;fi
+    started=$($MANAGER start hy2 "$id" 2>/dev/null) || return 1;is_true "$started" healthy || { "$MANAGER" rollback hy2 "$id" >/dev/null 2>&1 || true;return 1; }
+    "$MANAGER" confirm hy2 "$id" >/dev/null 2>&1 || { "$MANAGER" rollback hy2 "$id" >/dev/null 2>&1 || true;return 1; }
+    printf '%s\n' "$id" >"$RUN/owned-profile"
+  fi
+  route=$($ROUTE status 2>/dev/null || true);is_true "$route" active && is_true "$route" healthy && return 0
+  "$ROUTE" stop >/dev/null 2>&1 || true
+  "$ROUTE" start >/dev/null 2>&1
+}
+daemon(){
+  mkdir -p "$RUN";chmod 700 "$RUN";trap 'cleanup;exit 0' INT TERM
+  sleep 8
+  while enabled;do if reconcile;then sleep 15;else "$ROUTE" stop >/dev/null 2>&1 || true;sleep 60;fi;done
+  cleanup
+}
+case "${1:-}" in configure) configure "$@";; unconfigure) rm -f "$CONF";; daemon) daemon;; cleanup) mkdir -p "$RUN";cleanup;; *) echo 'usage: netscope-voice-boot {configure ID|unconfigure|daemon|cleanup}' >&2;exit 2;;esac

@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-netscope-setup
-PKG_VERSION:=0.6.0
+PKG_VERSION:=0.7.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=lststrdst
@@ -38,9 +38,16 @@ define Package/luci-app-netscope-setup/install
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-vpn-profile $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-hysteria $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-mieru $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-update $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-route $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-hy2-udp-probe $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-monitor $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-boot $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-l2tp-watchdog $(1)/usr/libexec/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/netscope-voice $(1)/etc/init.d/
+	$(INSTALL_BIN) ./files/etc/init.d/netscope-l2tp-watchdog $(1)/etc/init.d/
 endef
 
 $(eval $(call BuildPackage,luci-app-netscope-setup))

@@ -14,7 +14,7 @@ The current base is QWRT R26.02.02 / QSDK 12.5. NETSCOPE keeps the origin
 visible as `Based on QWRT` and preserves upstream authorship and licensing. It
 is not an official QWRT, Xiaomi, Qualcomm or OpenWrt project.
 
-> NETSCOPE 0.5 is released as a verifiable installable overlay for the exact
+> NETSCOPE 0.7-dev is released as a verifiable installable overlay for the exact
 > QWRT R26.2.2 base. It installs the UI and services on a running router, creates
 > a rollback backup and never writes NAND/UBI. It is not yet a factory or
 > sysupgrade image because the matching complete QWRT source/toolchain is not public.
@@ -39,7 +39,9 @@ maintainable product instead of a collection of one-off shell commands:
 |---|---|---|
 | NETSCOPE UI | Russian LuCI shell, login, navigation and base version | published as `luci-theme-netscope`; runs on the test router |
 | NETSCOPE Traffic | devices, conntrack, directions, ports, counters and controlled USB PCAP sessions | published as `luci-app-netscope`; Capture stays OFF after installation |
-| VPN Quick setup | prepare and explicitly activate WG, AWG, VLESS/Xray, Mieru and HY2 from LuCI | each protocol has preflight, confirmation, health checks and isolated rollback; Telegram/Discord UDP can be routed through HY2 without capturing games or L2TP |
+| VPN Quick setup | prepare and explicitly activate WG, AWG, VLESS/Xray, Mieru and HY2 from LuCI | each protocol has preflight, confirmation, health checks and isolated rollback; Telegram/Discord UDP can be routed through HY2 with opt-in boot recovery and fail-open |
+| Voice health | current Telegram/Discord endpoints, selected route, probe latency, jitter, loss and bounded history | local metadata only; call payload is never recorded |
+| L2TP watchdog | PPP, office routes, MTU/MSS and scoped reconnect checks | public service ships disabled; private probes, prefixes and credentials stay on the router |
 | IoT monitor | distinguish Wi‑Fi, DHCP, DNS, WAN and cloud failures | read-only tool published |
 | Recovery | backups, known-good baseline and return procedure | runbook published; no recovery image is distributed |
 | Wi‑Fi 7 / MLO Lab | investigate the vendor 5G-low + 5G-high topology | models, render-only helper and tests only; no live apply |

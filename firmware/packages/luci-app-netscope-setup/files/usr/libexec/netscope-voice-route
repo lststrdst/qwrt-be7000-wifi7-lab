@@ -11,6 +11,7 @@ IPT=${NETSCOPE_VOICE_IPTABLES:-/usr/sbin/iptables}
 IPSET=${NETSCOPE_VOICE_IPSET:-/usr/sbin/ipset}
 DNSMASQ=${NETSCOPE_VOICE_DNSMASQ:-/usr/sbin/dnsmasq}
 UDP_PROBE=${NETSCOPE_VOICE_UDP_PROBE:-/usr/libexec/netscope-hy2-udp-probe}
+MONITOR=${NETSCOPE_VOICE_MONITOR:-/usr/libexec/netscope-voice-monitor}
 CHAIN=NS_VOICE_HY2
 FWD_CHAIN=NS_VOICE_HY2_FWD
 TUN_IFACE=${NETSCOPE_VOICE_TUN_IFACE:-nshy2}
@@ -41,7 +42,9 @@ hy2_ok(){
       echo "$state" | grep -q "\"tun_interface\":\"$TUN_IFACE\"" && "$IP" link show dev "$TUN_IFACE" >/dev/null 2>&1
 }
 upstream_ok(){
-    [ -x "$UDP_PROBE" ] && "$UDP_PROBE" >/dev/null 2>&1
+    [ -x "$UDP_PROBE" ] || return 1
+    probe=$($UDP_PROBE 2>/dev/null) || { [ ! -x "$MONITOR" ] || "$MONITOR" sample fail >/dev/null 2>&1 || true;return 1; }
+    [ ! -x "$MONITOR" ] || "$MONITOR" sample ok "$probe" >/dev/null 2>&1 || true
 }
 create_sets(){
     "$IPSET" create "$TG_NETS" hash:net family inet hashsize 128 maxelem 256 -exist

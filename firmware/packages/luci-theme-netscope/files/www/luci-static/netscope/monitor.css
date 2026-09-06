@@ -44,3 +44,17 @@
 @media(max-width:1400px){#ns-monitor .workspace{grid-template-columns:170px minmax(0,1fr)}#ns-monitor .inspector{grid-column:1/-1;min-height:0}#ns-monitor .devices{min-height:0}}
 @media(max-width:1050px){#ns-monitor .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#ns-monitor .top{flex-wrap:wrap}#ns-monitor .top nav{order:0;flex-basis:auto}}
 @media(max-width:850px){#ns-monitor .workspace{display:block}#ns-monitor .panel{min-height:0;margin-bottom:12px}#ns-monitor .devices #ns-devices{display:flex;overflow:auto;max-height:none}#ns-monitor .devices #ns-devices .device{min-width:170px;width:170px}#ns-monitor .device-note{display:none}#ns-monitor .heading{display:block}#ns-monitor .observe-control{margin-top:16px}#ns-monitor .heading>div:first-child{max-width:none}#ns-monitor .filters{flex-wrap:wrap}#ns-monitor .filters input{flex-basis:100%}#ns-monitor .flow-columns{display:none}#ns-monitor .connection-flow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}#ns-monitor .flow-measure{grid-column:1/-1;justify-content:flex-start}#ns-monitor .flow-state{flex-basis:auto;margin-left:auto}#ns-monitor footer{flex-direction:column}}
+
+/* Voice health extends the existing NETSCOPE cards without a separate page. */
+#ns-monitor .metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
+#ns-monitor .metrics small{display:block;color:#b5b5b5;margin-top:4px;line-height:1.45}
+#ns-monitor .voice-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:14px 0 22px}
+#ns-monitor .voice-metrics>div{background:#2e3b31;border:1px solid #415448;border-radius:6px;padding:12px;min-width:0}
+#ns-monitor .voice-metrics span{display:block;font-size:.75rem;color:#afc3b5}
+#ns-monitor .voice-metrics strong{display:block;color:#d0f3d9;font-size:18px;margin-top:5px;font-variant-numeric:tabular-nums}
+#ns-monitor .voice-history{max-height:230px;min-height:0!important}
+#ns-monitor .voice-history-row{display:grid;grid-template-columns:90px 90px minmax(0,1fr);gap:10px;padding:9px 5px;border-bottom:1px solid #354138;font-size:.75rem}
+#ns-monitor .voice-history-row span:last-child{color:#b5b5b5}
+@media(max-width:1400px){#ns-monitor .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:850px){#ns-monitor .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){#ns-monitor .voice-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#ns-monitor .voice-history-row{grid-template-columns:70px 75px minmax(0,1fr)}}

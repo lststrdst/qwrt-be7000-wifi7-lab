@@ -1,0 +1,112 @@
+#!/usr/bin/lua
+-- Bounded HY2 voice telemetry. Records metadata only; never reads packet payloads.
+local fs=require'nixio.fs'
+local json=require'luci.jsonc'
+local ROOT=os.getenv('NETSCOPE_VOICE_ROOT') or '/mnt/sda1/NETSCOPE'
+local RUN=os.getenv('NETSCOPE_VOICE_RUN') or '/tmp/netscope-voice'
+local STATE=RUN..'/telemetry-state.json'
+local CURRENT=RUN..'/telemetry.json'
+local HISTORY=ROOT..'/runtime/voice/health.jsonl'
+local MAX_HISTORY=1024*1024
+local WINDOW=30
+
+local function read(path,limit)
+  local f=io.open(path,'rb');if not f then return nil end
+  local value=f:read(limit or 262144);f:close();return value
+end
+local function write_atomic(path,value)
+  local tmp=path..'.new';local f=assert(io.open(tmp,'wb'));assert(f:write(value));assert(f:close());fs.chmod(tmp,'600');assert(fs.rename(tmp,path))
+end
+local function mkdir(path) fs.mkdirr(path,'700');fs.chmod(path,'700') end
+local function ipv4(value)
+  local a,b,c,d=tostring(value):match('^(%d+)%.(%d+)%.(%d+)%.(%d+)$');if not a then return nil end
+  a,b,c,d=tonumber(a),tonumber(b),tonumber(c),tonumber(d);if a>255 or b>255 or c>255 or d>255 then return nil end
+  return ((a*256+b)*256+c)*256+d
+end
+local function cidr(value)
+  local address,bits=tostring(value):match('^([^/]+)/(%d+)$');bits=tonumber(bits);local number=ipv4(address)
+  if not number or not bits or bits<0 or bits>32 then return nil end
+  local span=2^(32-bits);return {first=number-number%span,last=number-number%span+span-1}
+end
+local function in_blocks(address,blocks)
+  local number=ipv4(address);if not number then return false end
+  for _,block in ipairs(blocks) do if number>=block.first and number<=block.last then return true end end
+  return false
+end
+local function load_blocks()
+  local blocks={}
+  for _,value in ipairs({'66.22.192.0/18','104.29.128.0/19'}) do blocks[#blocks+1]=cidr(value) end
+  for line in (read(ROOT..'/config/voice/telegram-ipv4.txt',32768) or ''):gmatch('[^\r\n]+') do local block=cidr(line);if block then blocks[#blocks+1]=block end end
+  return blocks
+end
+local function load_set(name)
+  local values={};local p=io.popen('/usr/sbin/ipset save '..name..' 2>/dev/null','r')
+  if p then for line in p:lines() do local value=line:match('^add%s+%S+%s+(%d+%.%d+%.%d+%.%d+)');if value then values[value]=true end end;p:close() end
+  return values
+end
+local function device_name(ip)
+  for line in (read('/tmp/dhcp.leases',131072) or ''):gmatch('[^\r\n]+') do
+    local _,_,address,name=line:match('^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)')
+    if address==ip and name and name~='*' then return name end
+  end
+  return ip
+end
+local function endpoints()
+  local blocks=load_blocks();local discord=load_set('ns_voice_discord');local telegram=load_set('ns_voice_telegram_dns');local out={}
+  for line in (read('/proc/net/nf_conntrack',4*1024*1024) or ''):gmatch('[^\r\n]+') do
+    if line:match('^ipv4') and line:match('%sudp%s') then
+      local src,dst,sport,dport,packets,bytes=line:match('src=(%S+)%s+dst=(%S+)%s+sport=(%d+)%s+dport=(%d+)%s+packets=(%d+)%s+bytes=(%d+)')
+      if src and (in_blocks(dst,blocks) or discord[dst] or telegram[dst]) then
+        local reply=line:match('packets=%d+%s+bytes=%d+%s+(.*)') or ''
+        local rsrc,rdst,rsport,rdport,rpackets,rbytes=reply:match('src=(%S+)%s+dst=(%S+)%s+sport=(%d+)%s+dport=(%d+)%s+packets=(%d+)%s+bytes=(%d+)')
+        out[#out+1]={client=src,device=device_name(src),destination=dst,port=tonumber(dport),
+          service=(discord[dst] or in_blocks(dst,{cidr('66.22.192.0/18'),cidr('104.29.128.0/19')})) and 'Discord' or 'Telegram',
+          tx_packets=tonumber(packets) or 0,rx_packets=tonumber(rpackets) or 0,tx_bytes=tonumber(bytes) or 0,rx_bytes=tonumber(rbytes) or 0,
+          assured=line:find('%[ASSURED%]')~=nil,reply_source=rsrc,reply_destination=rdst,reply_sport=tonumber(rsport),reply_dport=tonumber(rdport)}
+      end
+    end
+  end
+  table.sort(out,function(a,b)return (a.tx_bytes+a.rx_bytes)>(b.tx_bytes+b.rx_bytes) end)
+  while #out>12 do table.remove(out) end
+  return out
+end
+local function iface()
+  local out={name='nshy2',rx_bytes=0,tx_bytes=0,rx_packets=0,tx_packets=0,rx_dropped=0,tx_dropped=0,rx_errors=0,tx_errors=0}
+  for _,key in ipairs({'rx_bytes','tx_bytes','rx_packets','tx_packets','rx_dropped','tx_dropped','rx_errors','tx_errors'}) do out[key]=tonumber(read('/sys/class/net/nshy2/statistics/'..key,64) or 0) or 0 end
+  out.present=fs.access('/sys/class/net/nshy2') and true or false;return out
+end
+local function route_status()
+  local p=io.popen('/usr/libexec/netscope-voice-route status 2>/dev/null','r');if not p then return {} end
+  local value=json.parse(p:read('*a') or '') or {};p:close();return value
+end
+local function calculate(samples)
+  local failures,successes,latencies=0,0,{}
+  for _,sample in ipairs(samples) do if sample.ok then successes=successes+1;latencies[#latencies+1]=sample.latency_ms else failures=failures+1 end end
+  local jitter,total=0,0;for i=2,#latencies do total=total+math.abs(latencies[i]-latencies[i-1]) end;if #latencies>1 then jitter=total/(#latencies-1) end
+  return successes>0 and latencies[#latencies] or nil,math.floor(jitter*10+0.5)/10,(failures+#latencies)>0 and math.floor(failures*1000/(failures+#latencies)+0.5)/10 or 0
+end
+local function append_history(value)
+  mkdir(ROOT..'/runtime/voice')
+  local st=fs.stat(HISTORY);if st and st.size and st.size>MAX_HISTORY then fs.unlink(HISTORY..'.1');fs.rename(HISTORY,HISTORY..'.1') end
+  local f=io.open(HISTORY,'ab');if f then f:write(json.stringify(value),'\n');f:close();fs.chmod(HISTORY,'600') end
+end
+local function sample(ok,probe_json)
+  mkdir(RUN);local state=json.parse(read(STATE,131072) or '') or {samples={}};state.samples=type(state.samples)=='table' and state.samples or {}
+  local probe=json.parse(probe_json or '') or {};local item={at=os.time(),ok=ok,latency_ms=ok and tonumber(probe.latency_ms) or nil}
+  state.samples[#state.samples+1]=item;while #state.samples>WINDOW do table.remove(state.samples,1) end
+  local latency,jitter,loss=calculate(state.samples);local route=route_status();local eps=endpoints()
+  local current={updated_at=os.time(),active=route.active==true,healthy=route.healthy==true,upstream_probe=ok,route='HY2 TUN · mark 0x2 · table 101',
+    latency_ms=latency,jitter_ms=jitter,loss_percent=loss,window=#state.samples,endpoint=eps[1],endpoints=eps,interface=iface()}
+  write_atomic(STATE,json.stringify(state));write_atomic(CURRENT,json.stringify(current))
+  append_history({at=current.updated_at,ok=ok,latency_ms=latency,jitter_ms=jitter,loss_percent=loss,endpoint=current.endpoint and {service=current.endpoint.service,destination=current.endpoint.destination,port=current.endpoint.port} or nil})
+  print(json.stringify(current))
+end
+local function status()
+  local value=json.parse(read(CURRENT,262144) or '')
+  if not value then local route=route_status();value={updated_at=os.time(),active=route.active==true,healthy=route.healthy==true,upstream_probe=false,route='HY2 TUN · mark 0x2 · table 101',latency_ms=nil,jitter_ms=nil,loss_percent=nil,window=0,endpoints={},interface=iface()} end
+  local history={};for line in (read(HISTORY,MAX_HISTORY+4096) or ''):gmatch('[^\r\n]+') do local item=json.parse(line);if item then history[#history+1]=item end end
+  local first=math.max(1,#history-59);local recent={};for i=first,#history do recent[#recent+1]=history[i] end;value.history=recent
+  print(json.stringify(value))
+end
+local command=arg[1] or 'status'
+if command=='sample' then sample(arg[2]=='ok',arg[3]) elseif command=='status' then status() else io.stderr:write('usage: netscope-voice-monitor {status|sample ok JSON|sample fail}\n');os.exit(2) end

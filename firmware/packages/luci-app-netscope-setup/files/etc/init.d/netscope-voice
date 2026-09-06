@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# Disabled in public builds. LuCI enables this only after an explicit opt-in.
+START=97
+STOP=11
+USE_PROCD=1
+start_service(){
+  procd_open_instance voice
+  procd_set_param command /usr/libexec/netscope-voice-boot daemon
+  procd_set_param respawn 3600 3 30
+  procd_set_param stdout 0
+  procd_set_param stderr 0
+  procd_set_param term_timeout 20
+  procd_close_instance
+}
+stop_service(){ /usr/libexec/netscope-voice-boot cleanup >/dev/null 2>&1 || true; }

@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# Disabled until a private, validated USB configuration is supplied.
+START=98
+STOP=10
+USE_PROCD=1
+start_service(){
+  procd_open_instance l2tp
+  procd_set_param command /usr/libexec/netscope-l2tp-watchdog daemon
+  procd_set_param respawn 3600 3 30
+  procd_set_param stdout 0
+  procd_set_param stderr 0
+  procd_set_param term_timeout 20
+  procd_close_instance
+}
+stop_service(){ /usr/libexec/netscope-l2tp-watchdog cleanup >/dev/null 2>&1 || true; }

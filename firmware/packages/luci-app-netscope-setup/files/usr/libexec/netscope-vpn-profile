@@ -13,7 +13,9 @@ XRAY=${NETSCOPE_VPN_XRAY:-/usr/bin/xray}
 MIERU=${NETSCOPE_VPN_MIERU:-/usr/bin/mieru}
 HYSTERIA=${NETSCOPE_VPN_HYSTERIA:-/usr/bin/hysteria}
 IPT=${NETSCOPE_VPN_IPTABLES:-/usr/sbin/iptables}
+UDP_PROBE=${NETSCOPE_VPN_UDP_PROBE:-/usr/libexec/netscope-hy2-udp-probe}
 [ -x "$HYSTERIA" ] || HYSTERIA=/mnt/sda1/qwrt-services/hysteria/bin/hysteria
+[ -x "$MIERU" ] || MIERU=/mnt/sda1/qwrt-services/mieru/bin/mieru
 
 die(){ echo "netscope-vpn-profile: $*" >&2; exit 1; }
 valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
@@ -158,6 +160,10 @@ start_proxy(){
     fi
     echo $! >"$STATE_DIR/pid"
     n=0;while ! healthy && [ "$n" -lt 8 ];do sleep 1;n=$((n+1));done
+    if [ "$KIND" = mieru ];then
+        [ -x "$UDP_PROBE" ] || die 'SOCKS5 UDP probe unavailable'
+        NETSCOPE_SOCKS_PORT="$LOCAL_PORT" "$UDP_PROBE" >/dev/null || die 'Mieru failed the end-to-end UDP probe'
+    fi
 }
 
 action=${1:-status};shift || true

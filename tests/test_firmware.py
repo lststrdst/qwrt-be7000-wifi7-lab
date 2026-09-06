@@ -24,6 +24,7 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('xiaomi,be7000', installer)
         self.assertNotIn('sysupgrade', installer)
         self.assertNotIn('mtd write', installer)
+        self.assertIn('wg awg vless mieru hy2', installer)
         for forbidden in ('/etc/config/network', '/etc/config/firewall', 'network restart', 'firewall restart'):
             self.assertNotIn(forbidden, installer)
         self.assertIn('Capture did not recover to OFF', installer)
@@ -54,9 +55,15 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/lib/lua/luci/view/netscope/setup.htm',
             'usr/libexec/netscope-vpn-profile',
             'usr/libexec/netscope-install-hysteria',
+            'usr/libexec/netscope-install-mieru',
             'usr/libexec/netscope-hy2-udp-probe',
             'usr/libexec/netscope-voice-route',
             'usr/libexec/netscope-voice-update',
+            'usr/libexec/netscope-voice-monitor',
+            'usr/libexec/netscope-voice-boot',
+            'usr/libexec/netscope-l2tp-watchdog',
+            'etc/init.d/netscope-voice',
+            'etc/init.d/netscope-l2tp-watchdog',
             'www/luci-static/netscope/setup.js',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}
@@ -78,7 +85,7 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn("params.set('token'", js)
         self.assertIn('AbortController', js)
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')
-        for forbidden in ('uci commit', '/etc/init.d/', 'wg-quick up'):
+        for forbidden in ('uci commit', 'wg-quick up', 'network restart', 'firewall restart'):
             self.assertNotIn(forbidden, model)
         self.assertIn("post('preflight')", controller)
         self.assertIn("post('delete')", controller)
@@ -124,10 +131,14 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('link show dev "$TUN_IFACE"', manager)
         self.assertIn('HYSTERIA_DISABLE_UPDATE_CHECK=1', manager)
         self.assertIn('HYSTERIA=/mnt/sda1/qwrt-services/hysteria/bin/hysteria', manager)
+        self.assertIn('MIERU=/mnt/sda1/qwrt-services/mieru/bin/mieru', manager)
+        self.assertIn('NETSCOPE_SOCKS_PORT="$LOCAL_PORT" "$UDP_PROBE"', manager)
+        self.assertIn('Mieru failed the end-to-end UDP probe', manager)
 
     def test_voice_route_is_narrow_atomic_and_fail_open(self):
         route = (FILES/'usr/libexec/netscope-voice-route').read_text(encoding='utf-8')
         update = (FILES/'usr/libexec/netscope-voice-update').read_text(encoding='utf-8')
+        probe = (FILES/'usr/libexec/netscope-hy2-udp-probe').read_text(encoding='utf-8')
         self.assertIn('NS_VOICE_HY2', route)
         self.assertIn('ns_voice_discord', route)
         self.assertIn('ns_voice_discord_nets', route)
@@ -141,8 +152,37 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('NS_VOICE_HY2_FWD', route)
         self.assertIn('-I PREROUTING 1 -i br-lan', route)
         self.assertIn('/usr/libexec/netscope-hy2-udp-probe', route)
+        self.assertIn("os.getenv('NETSCOPE_SOCKS_PORT')", probe)
         self.assertIn('sleep 10', route)
         self.assertIn("HY2 or route unhealthy; voice interception removed (fail open)", route)
+
+    def test_voice_autostart_and_l2tp_watchdog_are_opt_in_and_scoped(self):
+        boot = (FILES/'usr/libexec/netscope-voice-boot').read_text(encoding='utf-8')
+        monitor = (FILES/'usr/libexec/netscope-voice-monitor').read_text(encoding='utf-8')
+        l2tp = (FILES/'usr/libexec/netscope-l2tp-watchdog').read_text(encoding='utf-8')
+        voice_init = (FILES/'etc/init.d/netscope-voice').read_text(encoding='utf-8')
+        l2tp_init = (FILES/'etc/init.d/netscope-l2tp-watchdog').read_text(encoding='utf-8')
+        route = (FILES/'usr/libexec/netscope-voice-route').read_text(encoding='utf-8')
+        update = (FILES/'usr/libexec/netscope-voice-update').read_text(encoding='utf-8')
+        self.assertIn('autostart.conf', boot)
+        self.assertIn('valid_id', boot)
+        self.assertIn("$ROUTE\" stop", boot)
+        self.assertIn('fail-open', boot)
+        self.assertNotIn('network restart', boot)
+        self.assertNotIn('firewall restart', boot)
+        self.assertIn('health.jsonl', monitor)
+        self.assertIn('MAX_HISTORY', monitor)
+        self.assertIn('/proc/net/nf_conntrack', monitor)
+        self.assertNotIn('payload', monitor.lower().replace('never reads packet payloads',''))
+        self.assertIn('NS_L2TP_MSS', l2tp)
+        self.assertIn('failures" -ge 3', l2tp)
+        self.assertIn('office-vpn-up', l2tp)
+        self.assertNotIn('network restart', l2tp)
+        self.assertNotIn('firewall restart', l2tp)
+        self.assertNotIn('/etc/rc.d/', voice_init)
+        self.assertNotIn('/etc/rc.d/', l2tp_init)
+        self.assertIn('start_service', voice_init)
+        self.assertIn('start_service', l2tp_init)
         self.assertNotIn('TPROXY', route)
         self.assertNotIn('network restart', route)
         self.assertIn('core.telegram.org/resources/cidr.txt', update)
@@ -158,6 +198,19 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('SHA256=fa19cad58c8d2d93aae9be31bfbb75e40f8f8ee7563fbd9ae9f775334d46cd69', installer)
         self.assertIn('hysteria-linux-arm64', installer)
         self.assertIn('checksum mismatch', installer)
+        self.assertNotIn('| sh', installer)
+        self.assertNotIn('eval ', installer)
+        self.assertNotIn('/etc/init.d/', installer)
+        self.assertNotIn('iptables', installer)
+
+    def test_mieru_runtime_installer_is_pinned_and_never_starts_vpn(self):
+        installer = (FILES/'usr/libexec/netscope-install-mieru').read_text(encoding='utf-8')
+        self.assertIn('VERSION=v3.36.1', installer)
+        self.assertIn('SHA256=b11bd3ac2ad5f7f948a49bb5ff58ef24fed309fbe7a48594755e60fe72eb2477', installer)
+        self.assertIn('BINARY_SHA256=0d27b450efc1970106c47ad3bd3bd7fdbfec56f22159382c92d270dd3feb3bfe', installer)
+        self.assertIn('mieru_3.36.1_linux_arm64.tar.gz', installer)
+        self.assertIn('archive checksum mismatch', installer)
+        self.assertIn('extracted binary checksum mismatch', installer)
         self.assertNotIn('| sh', installer)
         self.assertNotIn('eval ', installer)
         self.assertNotIn('/etc/init.d/', installer)

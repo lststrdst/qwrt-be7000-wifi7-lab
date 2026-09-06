@@ -34,10 +34,11 @@ if (typeof document !== 'undefined') (() => {
   const app = document.getElementById('ns-monitor');
   if (!app) return;
   const el = id => app.querySelector('#ns-' + id), N = Netscope;
-  let data = null, device = '', tab = 'connections', selected = null, packet = null;
+  let data = null, voiceData = null, device = '', tab = 'connections', selected = null, packet = null;
   let paused = true, busy = false, actionBusy = false, limit = 100, wanPrevious = null, speed = null;
   const node = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = String(text); if (cls) e.className = cls; return e; };
   const endpoint = (ip, port) => `${ip && ip.includes(':') ? '[' + ip + ']' : ip}${port != null ? ':' + port : ''}`;
+  const decimal = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('ru-RU',{maximumFractionDigits:1});
   const names = () => new Map(N.list(data?.devices).map(d => [d.ip, d.name]));
   function replaceRows(container, rows, key) {
     const focus = document.activeElement?.dataset?.[key], scroll = container.scrollTop;
@@ -47,8 +48,9 @@ if (typeof document !== 'undefined') (() => {
   }
   function error(message) { el('error').hidden = !message; el('error').textContent = message || ''; }
   function showTab(value) {
-    tab = value; el('live-view').hidden = tab !== 'connections'; el('lab-view').hidden = tab !== 'lab';
-    el('nav-connections').classList.toggle('active', tab === 'connections'); el('nav-lab').classList.toggle('active', tab === 'lab');
+    tab = value; el('live-view').hidden = tab !== 'connections'; el('voice-view').hidden = tab !== 'voice'; el('lab-view').hidden = tab !== 'lab';
+    el('nav-connections').classList.toggle('active', tab === 'connections'); el('nav-voice').classList.toggle('active', tab === 'voice'); el('nav-lab').classList.toggle('active', tab === 'lab');
+    if(tab==='voice')renderVoice();
     renderDetails();
   }
   function selectDevice(ip) { device = ip; selected = null; limit = 100; showTab('connections'); renderDevices(); renderFlows(); renderDetails(); }
@@ -93,7 +95,7 @@ if (typeof document !== 'undefined') (() => {
   function section(title, text, cls) { const fragment = document.createDocumentFragment(); fragment.append(node('h3', title), node('pre', text, cls)); return fragment; }
   function renderDetails() {
     const target = el('details'); target.replaceChildren();
-    if (tab === 'lab') return; // Capture UI owns the shared inspector in this view.
+    if (tab === 'lab' || tab === 'voice') return; // The selected feature owns the shared inspector.
     const f = N.list(data?.flows).find(f => f.id === selected);
     el('detail-title').textContent = 'Инспектор соединения';
     el('detail-subtitle').textContent = 'Conntrack · не отдельный пакет';
@@ -123,6 +125,15 @@ if (typeof document !== 'undefined') (() => {
     target.append(node('h3', 'Маршрут и NAT'), node('p', 'Показаны исходная и ответная пары адресов conntrack — по ним видно преобразование NAT. Выходной интерфейс и прохождение Xray/L2TP эта таблица не доказывает.', 'hint'));
   }
   function renderLab() {} // Compatibility hook; Capture owns its lifecycle/card.
+  function renderVoice() {
+    const v=voiceData||{},endpoint=v.endpoint;
+    el('voice-state').textContent=v.active?(v.healthy?'ИСПРАВЕН':'СБОЙ'):'ВЫКЛ';
+    el('voice-summary').textContent=v.available===false?'Модуль не установлен':`${decimal(v.latency_ms)} мс · jitter ${decimal(v.jitter_ms)} · потери ${decimal(v.loss_percent)}%`;
+    const current=el('voice-current');current.replaceChildren();current.append(node('span','МАРШРУТ','small-label'),node('div',v.route||'HY2 TUN · mark 0x2 · table 101','mono'),node('span','АКТИВНЫЙ ENDPOINT','small-label'),node('div',endpoint?`${endpoint.device||endpoint.client} → ${endpoint.destination}:${endpoint.port} · ${endpoint.service}`:'Сейчас не найден','mono'));
+    const metrics=el('voice-metrics');metrics.replaceChildren();for(const [label,value] of [['Задержка HY2/STUN',decimal(v.latency_ms)+' мс'],['Jitter проб',decimal(v.jitter_ms)+' мс'],['Потери проб',decimal(v.loss_percent)+'%'],['Окно',`${v.window||0} проб`]]){const box=node('div');box.append(node('span',label),node('strong',value));metrics.append(box);}
+    const endpoints=el('voice-endpoints'),endpointRows=N.list(v.endpoints).map(item=>{const row=node('div',null,'flow connection-flow');const src=node('div',null,'flow-endpoint'),dst=node('div',null,'flow-endpoint'),measure=node('div',null,'flow-measure');src.append(node('strong',item.device||item.client),node('span',item.client,'mono'));dst.append(node('strong',item.service),node('span',`${item.destination}:${item.port}`,'mono'));measure.append(node('span','UDP','protocol-tag'),node('strong',`${N.bytes(item.tx_bytes)} ↑ / ${N.bytes(item.rx_bytes)} ↓`),node('span',item.assured?'ASSURED':'TRACKED','flow-state'));row.append(src,dst,measure);return row;});replaceRows(endpoints,endpointRows,'endpoint');if(!endpointRows.length)endpoints.append(node('p','Активных Telegram/Discord UDP endpoint сейчас нет.','empty'));
+    const history=el('voice-history'),historyRows=N.list(v.history).slice().reverse().map(item=>{const row=node('div',null,'voice-history-row');row.append(node('span',new Date((item.at||0)*1000).toLocaleTimeString('ru-RU'),'mono'),node('strong',item.ok?`${decimal(item.latency_ms)} мс`:'сбой пробы'),node('span',`jitter ${decimal(item.jitter_ms)} · потери ${decimal(item.loss_percent)}%`));return row;});history.replaceChildren(...historyRows);if(!historyRows.length)history.append(node('p','История появится после первой UDP-пробы.','empty'));
+  }
   async function getJSON(url, options={}) {
     const controller = new AbortController(), timer=setTimeout(()=>controller.abort(),9000);
     try {
@@ -149,13 +160,15 @@ if (typeof document !== 'undefined') (() => {
     } catch(e) { error(e.message || 'Нет связи с роутером.');el('status').textContent='Нет связи · данные устарели';el('status').dataset.state='error'; }
     finally {busy=false;}
   }
+  async function refreshVoice(){try{const value=await getJSON(app.dataset.voice);if(value.error)throw Error(value.error);voiceData=value;renderVoice();}catch(e){el('voice-state').textContent='НЕТ ДАННЫХ';el('voice-summary').textContent=e.message||'Телеметрия недоступна';}}
   el('all-devices').onclick=()=>selectDevice('');
-  el('nav-connections').onclick=()=>showTab('connections');el('nav-lab').onclick=()=>showTab('lab');
+  el('nav-connections').onclick=()=>showTab('connections');el('nav-voice').onclick=()=>showTab('voice');el('nav-lab').onclick=()=>showTab('lab');
   el('search').oninput=()=>{limit=100;renderFlows();};el('protocol').onchange=()=>{limit=100;renderFlows();};
   el('more').onclick=()=>{limit+=100;renderFlows();};
   el('pause').onclick=()=>{paused=!paused;el('pause').textContent=paused?'Включить наблюдение':'Выключить наблюдение';el('pause').setAttribute('aria-pressed',String(!paused));el('pause').classList.toggle('primary',paused);el('status').textContent=paused?'Выключено · последний снимок':'Подключение…';el('status').dataset.state=paused?'off':'connecting';wanPrevious=null;if(!paused)refresh(true);};
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
   setInterval(refresh,3000);
+  refreshVoice();setInterval(()=>{if(!document.hidden)refreshVoice();},3000);
 })();
 
 })();

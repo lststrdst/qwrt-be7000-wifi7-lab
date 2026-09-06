@@ -1,5 +1,5 @@
 -- Private, on-device configuration preparation and explicit transactional activation.
-local M={VERSION='0.6.0-dev'}
+local M={VERSION='0.7.0-dev'}
 local fs=require'nixio.fs';local json=require'luci.jsonc'
 local C=require'luci.model.netscope_setup_runtime';local P=C
 local function need(v,msg)assert(v,msg);return v end
@@ -30,8 +30,10 @@ function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
         hysteria=candidates({'/usr/bin/hysteria','/usr/sbin/hysteria','/mnt/sda1/qwrt-services/hysteria/bin/hysteria'}),
-        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'}),
-        voice_route=candidates({'/usr/libexec/netscope-voice-route'}),voice_update=candidates({'/usr/libexec/netscope-voice-update'})}
+        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),mieru_installer=candidates({'/usr/libexec/netscope-install-mieru'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'}),
+        voice_route=candidates({'/usr/libexec/netscope-voice-route'}),voice_update=candidates({'/usr/libexec/netscope-voice-update'}),
+        voice_monitor=candidates({'/usr/libexec/netscope-voice-monitor'}),voice_boot=candidates({'/usr/libexec/netscope-voice-boot'}),
+        voice_init=candidates({'/etc/init.d/netscope-voice'}),l2tp_watchdog=candidates({'/usr/libexec/netscope-l2tp-watchdog'})}
 end
 local function inventory()
     local used_udp,used_tcp,routes={},{},{}
@@ -70,7 +72,7 @@ function M.status()
         need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,manager=t.manager~=nil,voice_route=t.voice_route~=nil,voice_update=t.voice_update~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,mieru_installer=t.mieru_installer~=nil,manager=t.manager~=nil,voice_route=t.voice_route~=nil,voice_update=t.voice_update~=nil,voice_monitor=t.voice_monitor~=nil,voice_boot=t.voice_boot~=nil,l2tp_watchdog=t.l2tp_watchdog~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
         note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray, Mieru и Hysteria 2. Каждый профиль использует только собственный интерфейс или loopback-порт.'
             or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
@@ -231,6 +233,36 @@ function M.voice_status()
     local route=M.tools().voice_route;if not route then return {active=false,healthy=false,hy2=false,available=false,telegram_nets=0,telegram_dns_ips=0,discord_ips=0,discord_nets=0,dns_integration=false} end
     local ok,out=P.exec({route,'status'},4);if not ok then return {active=false,healthy=false,hy2=false,available=true,error='Состояние voice routing недоступно'} end
     local value=json.parse(out);if type(value)~='table' then return {active=false,healthy=false,hy2=false,available=true,error='Некорректное состояние voice routing'} end
+    value.available=true
+    local conf=C.read(C.ROOT..'/config/voice/autostart.conf',512) or ''
+    local configured=conf:match('\nenabled=1\n') or conf:match('^enabled=1\n')
+    local profile=conf:match('\nprofile=([^\r\n]+)') or conf:match('^profile=([^\r\n]+)')
+    value.autostart=configured~=nil and C.valid_id(profile or '') and fs.access('/etc/rc.d/S97netscope-voice') and true or false
+    return value
+end
+function M.voice_telemetry()
+    local monitor=M.tools().voice_monitor
+    if not monitor then return {available=false,active=false,healthy=false,history={},endpoints={}} end
+    local ok,out=P.exec({monitor,'status'},6);if not ok then return {available=true,active=false,healthy=false,history={},endpoints={},error='Телеметрия звонков недоступна'} end
+    local value=json.parse(out);if type(value)~='table' then return {available=true,active=false,healthy=false,history={},endpoints={},error='Некорректная телеметрия звонков'} end
+    value.available=true;return value
+end
+function M.voice_autostart(enable)
+    local tools=M.tools();local boot=need(tools.voice_boot,'Сервис автозапуска HY2 не установлен');local init=need(tools.voice_init,'Init-сервис автозапуска HY2 не установлен')
+    if enable then
+        local live=runtime_status(tools.manager,'hy2');need(live.active and live.healthy and C.valid_id(live.id),'Сначала включите и проверьте конкретный профиль HY2')
+        local ok,out=P.exec({boot,'configure',live.id},5);need(ok,'Не удалось сохранить безопасный автозапуск: '..tostring(out):sub(1,160))
+        local enabled=P.exec({init,'enable'},5);if not enabled then P.exec({boot,'unconfigure'},3);error('Не удалось включить init-сервис') end
+        local started,msg=P.exec({init,'start'},8);if not started then P.exec({init,'disable'},5);P.exec({boot,'unconfigure'},3);error('Init-сервис не запущен: '..tostring(msg):sub(1,160)) end
+        local value=M.voice_status();value.note='После загрузки сервис поднимет только выбранный HY2 и узкий голосовой маршрут. При ошибке voice policy снимается (fail-open).';return value
+    end
+    P.exec({init,'stop'},25);P.exec({init,'disable'},5);P.exec({boot,'unconfigure'},3)
+    local value=M.voice_status();value.note='Автозапуск выключен. Голосовой policy route снят; вручную запущенный HY2 не останавливается.';return value
+end
+function M.l2tp_status()
+    local watchdog=M.tools().l2tp_watchdog;if not watchdog then return {available=false,enabled=false,healthy=false} end
+    local ok,out=P.exec({watchdog,'status'},4);if not ok then return {available=true,enabled=false,healthy=false,error='Состояние L2TP watchdog недоступно'} end
+    local value=json.parse(out);if type(value)~='table' then return {available=true,enabled=false,healthy=false,error='Некорректное состояние L2TP watchdog'} end
     value.available=true;return value
 end
 function M.voice_update()
@@ -259,6 +291,14 @@ function M.install_hysteria()
     local ok,out=P.exec({installer},120);need(ok,'Установка Hysteria 2 не выполнена: '..tostring(out):sub(1,240))
     local installed=M.tools().hysteria;need(installed~=nil,'Установщик завершился без доступного runtime')
     return {installed=true,path=installed,version='v2.11.0',note='Runtime проверен по закреплённому SHA-256 и установлен на USB. Он не запущен; DNS, маршруты и firewall не менялись.'}
+end
+function M.install_mieru()
+    local tools=M.tools();need(not tools.mieru,'Mieru уже установлен')
+    local installer=need(tools.mieru_installer,'Проверенный установщик Mieru отсутствует')
+    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>33554432,'Требуется writable USB со свободными 32 МиБ')
+    local ok,out=P.exec({installer},120);need(ok,'Установка Mieru не выполнена: '..tostring(out):sub(1,240))
+    local installed=M.tools().mieru;need(installed~=nil,'Установщик завершился без доступного runtime')
+    return {installed=true,path=installed,version='v3.36.1',note='Официальный Mieru v3.36.1 проверен по закреплённому SHA-256 и установлен на USB. Процесс, профиль, маршруты и firewall не запускались.'}
 end
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end

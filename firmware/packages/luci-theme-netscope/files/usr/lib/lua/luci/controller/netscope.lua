@@ -5,6 +5,7 @@ function index()
     local p = entry({'admin','status','netscope'}, call('page'), 'NETSCOPE', 9)
     p.dependent = true
     entry({'admin','status','netscope','snapshot'}, call('snapshot')).leaf = true
+    entry({'admin','status','netscope','voice'}, call('voice')).leaf = true
     entry({'admin','status','netscope','lab'}, post('lab')).leaf = true
     local capture = entry({'admin','status','netscope','capture'},call('capture_read','status'))
     capture.dependent = true -- Old Lua LuCI requires an explicit parent node.
@@ -41,6 +42,15 @@ function snapshot()
     if not ok then h.status(503, 'Unavailable'); data = {error='Источник данных временно недоступен'} end
     h.prepare_content('application/json')
     h.write_json(data)
+end
+
+function voice()
+    headers()
+    local h=require'luci.http'
+    if h.getenv('REQUEST_METHOD')~='GET' then h.status(405,'GET required');h.prepare_content('application/json');h.write_json({error='Требуется GET'});return end
+    local ok,model=pcall(require,'luci.model.netscope_setup')
+    local data=ok and model.voice_telemetry and model.voice_telemetry() or {available=false,active=false,healthy=false,history={},endpoints={}}
+    h.prepare_content('application/json');h.write_json(data)
 end
 
 function lab()

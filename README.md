@@ -15,7 +15,7 @@
 сохраняются. NETSCOPE не является официальным проектом QWRT, Xiaomi,
 Qualcomm или OpenWrt.
 
-> NETSCOPE 0.5 выпускается как проверяемый установочный overlay для точной базы
+> NETSCOPE 0.7-dev выпускается как проверяемый установочный overlay для точной базы
 > QWRT R26.2.2: он ставит интерфейс и сервисы поверх работающего роутера, делает
 > резервную копию и не пишет NAND/UBI. Это ещё не factory/sysupgrade image — в
 > открытом доступе нет соответствующего полного дерева QWRT и toolchain.
@@ -41,7 +41,9 @@ BE7000 является моим основным домашним шлюзом.
 |---|---|---|
 | NETSCOPE UI | единая русская оболочка LuCI, вход, навигация и версия базы | исходники опубликованы в `luci-theme-netscope`; работает на тестовом роутере |
 | NETSCOPE Traffic | устройства, conntrack, направления, порты, счётчики и управляемые USB PCAP-сессии | исходники опубликованы в `luci-app-netscope`; Capture после установки выключен |
-| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray, Mieru и HY2 из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; Telegram/Discord UDP можно отдельно направить в HY2 без захвата игр и L2TP |
+| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray, Mieru и HY2 из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; Telegram/Discord UDP направляется в HY2 с opt-in автозапуском и fail-open |
+| Voice health | текущие Telegram/Discord endpoint, маршрут, задержка, jitter, потери проб и история | метаданные и bounded-журнал на USB; payload звонка не записывается |
+| L2TP watchdog | контроль PPP, офисных маршрутов, MTU/MSS и ограниченное переподключение | универсальный сервис опубликован выключенным; приватный probe/routes/reconnect остаётся только на роутере |
 | IoT monitor | доказательства потери Wi‑Fi, DHCP, DNS, WAN или облака | опубликован read-only инструмент |
 | Recovery | бэкапы, известный baseline и порядок возврата | инструкция опубликована; образ восстановления не распространяется |
 | Wi‑Fi 7 / MLO Lab | исследование заводской схемы 5G low + 5G high | только модели, render-only helper и тесты; live apply отсутствует |
@@ -115,6 +117,9 @@ tests/                                 product, security и failure-path tests
 Подробно назначение слоёв описано в [архитектуре NETSCOPE](docs/ARCHITECTURE.md),
 а условия первого полноценного flashable-образа — в
 [release checklist](firmware/RELEASE-CHECKLIST.md).
+
+Отдельно: [голосовой маршрут и телеметрия](docs/DISCORD-VOICE.md) и
+[безопасный L2TP watchdog](docs/L2TP-WATCHDOG.md).
 
 ## Локальная проверка
 

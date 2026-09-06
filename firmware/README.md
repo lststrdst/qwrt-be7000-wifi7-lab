@@ -39,6 +39,11 @@ LuCI-приложение **VPN Quick setup**:
 - у каждого runtime есть preflight, подтверждение и watchdog rollback;
 - отдельной кнопкой добавляет только Telegram/Discord UDP → HY2 TUN через
   timeout-ipset, собственные mark/table/filter-chain и fail-open watchdog;
+- после явного opt-in восстанавливает выбранный HY2 и голосовой route при boot,
+  но при любой ошибке сначала возвращает обычную маршрутизацию;
+- хранит bounded-историю RTT/jitter/loss UDP-проб и видимых voice endpoint;
+- содержит выключенный по умолчанию L2TP watchdog с приватной конфигурацией на
+  USB: PPP health, MTU 1400, MSS 1360 и scoped reconnect;
 - не меняет default route, L2TP и существующую VLESS policy routing.
 
 ### `packages/netscope-wifi7-lab`

@@ -1,6 +1,6 @@
 # Перед первым flashable-образом NETSCOPE
 
-Публичный installable overlay 0.5 не пишет firmware-разделы и поэтому имеет
+Публичный installable overlay 0.7-dev не пишет firmware-разделы и поэтому имеет
 отдельный, уже реализованный контур: точная проверка QWRT R26.2.2, SHA-256,
 USB backup, scoped install/rollback и Capture/VPN OFF. Для factory/sysupgrade
 должны быть закрыты все пункты ниже; тест overlay не проверяет загрузку образа.
@@ -18,8 +18,10 @@ USB backup, scoped install/rollback и Capture/VPN OFF. Для factory/sysupgrad
   Приватный ключ не попадает в firmware, Git, release assets или публичный download API.
 - [ ] Проверить чистый первый запуск: WAN/LAN, DNS, Wi-Fi, LuCI, DHCP, firewall;
   Capture/MITM и новые VPN выключены по умолчанию.
-- [ ] Доделать применение VPN из мастера: показ diff, проверка конфликтов
-  портов/подсетей, резервная копия, независимый rollback и подтверждение доступности.
+- [x] Реализовать транзакционное применение VPN из мастера: проверка конфликтов
+  портов/подсетей, независимый runtime-state, health check, подтверждение и rollback.
+- [ ] Проверить WG, AWG, VLESS/Xray, Mieru и HY2 на чистом стенде с реальными
+  внешними endpoint; публичная конфигурация и образ не содержат их секретов.
 - [ ] Проверить power loss, заполнение/отключение USB, перезапуск служб,
   обновление и возврат на известную рабочую сборку.
 - [ ] Подтвердить UART 1,8 В и аппаратный recovery на тестовом BE7000.
