@@ -1,5 +1,6 @@
 #!/bin/sh
-# Narrow, fail-open policy routing for Telegram relays and Discord voice over HY2 TUN.
+# Narrow, fail-open policy routing for Telegram relays and Discord voice.
+# HY2 is primary; a healthy, explicitly configured Mieru profile can be a warm reserve.
 set -eu
 umask 077
 
@@ -12,6 +13,7 @@ IPSET=${NETSCOPE_VOICE_IPSET:-/usr/sbin/ipset}
 DNSMASQ=${NETSCOPE_VOICE_DNSMASQ:-/usr/sbin/dnsmasq}
 UDP_PROBE=${NETSCOPE_VOICE_UDP_PROBE:-/usr/libexec/netscope-hy2-udp-probe}
 MONITOR=${NETSCOPE_VOICE_MONITOR:-/usr/libexec/netscope-voice-monitor}
+MIERU_TUN=${NETSCOPE_VOICE_MIERU_TUN:-/usr/libexec/netscope-mieru-tun}
 CHAIN=NS_VOICE_HY2
 FWD_CHAIN=NS_VOICE_HY2_FWD
 TUN_IFACE=${NETSCOPE_VOICE_TUN_IFACE:-nshy2}
@@ -28,6 +30,7 @@ DISCORD_NETS=ns_voice_discord_nets
 DISCORD_VOICE_NETS='66.22.192.0/18 104.29.128.0/19'
 LIST="$ROOT/config/voice/telegram-ipv4.txt"
 DNS_CONF=/tmp/dnsmasq.d/netscope-voice.conf
+ACTIVE_TUN=$RUN/active-tun
 
 die(){ echo "netscope-voice-route: $*" >&2; exit 1; }
 ipt(){ "$IPT" -w 3 "$@"; }
@@ -45,6 +48,27 @@ upstream_ok(){
     [ -x "$UDP_PROBE" ] || return 1
     probe=$($UDP_PROBE 2>/dev/null) || { [ ! -x "$MONITOR" ] || "$MONITOR" sample fail >/dev/null 2>&1 || true;return 1; }
     [ ! -x "$MONITOR" ] || "$MONITOR" sample ok "$probe" >/dev/null 2>&1 || true
+}
+mieru_ok(){
+    [ -x "$MIERU_TUN" ] || return 1
+    configured=$(sed -n 's/^mieru_profile=//p' "$ROOT/config/voice/autostart.conf" 2>/dev/null | head -n1)
+    if [ -n "$configured" ]; then
+      printf '%s\n' "$configured" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$' || return 1
+      state=$($MANAGER status mieru 2>/dev/null) || return 1
+      live=$(echo "$state" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+      [ "$live" = "$configured" ] || return 1
+    fi
+    state=$($MIERU_TUN status 2>/dev/null) || return 1
+    echo "$state" | grep -q '"active":true' && echo "$state" | grep -q '"healthy":true'
+}
+mieru_upstream_ok(){
+    [ -x "$UDP_PROBE" ] || return 1
+    probe=$(NETSCOPE_SOCKS_PORT=2082 "$UDP_PROBE" 2>/dev/null) || { [ ! -x "$MONITOR" ] || "$MONITOR" sample fail >/dev/null 2>&1 || true;return 1; }
+    [ ! -x "$MONITOR" ] || "$MONITOR" sample ok "$probe" >/dev/null 2>&1 || true
+}
+selected_tun(){
+    selected=$(cat "$ACTIVE_TUN" 2>/dev/null || true)
+    case "$selected" in "$TUN_IFACE"|nsmieru) printf '%s\n' "$selected";; *) printf '%s\n' "$TUN_IFACE";;esac
 }
 create_sets(){
     "$IPSET" create "$TG_NETS" hash:net family inet hashsize 128 maxelem 256 -exist
@@ -93,15 +117,19 @@ detach(){
     ipt -t filter -X "$FWD_CHAIN" 2>/dev/null || true
     while "$IP" rule del fwmark "$MARK" table "$TABLE" pref "$PREF" 2>/dev/null; do :; done
     "$IP" route flush table "$TABLE" 2>/dev/null || true
+    rm -f "$ACTIVE_TUN"
 }
 attach(){
+    target=${1:-$TUN_IFACE}
+    case "$target" in "$TUN_IFACE"|nsmieru) :;;*) die 'invalid voice TUN';;esac
+    "$IP" link show dev "$target" >/dev/null 2>&1 || die 'selected voice TUN is unavailable'
     detach
     "$IP" rule add fwmark "$MARK" table "$TABLE" pref "$PREF"
-    "$IP" route add default dev "$TUN_IFACE" table "$TABLE"
+    "$IP" route add default dev "$target" table "$TABLE"
     ipt -t filter -N "$FWD_CHAIN"
-    ipt -t filter -A "$FWD_CHAIN" -i br-lan -o "$TUN_IFACE" -p udp -m mark --mark "$MARK" -j ACCEPT
+    ipt -t filter -A "$FWD_CHAIN" -i br-lan -o "$target" -p udp -m mark --mark "$MARK" -j ACCEPT
     for lan_net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
-      ipt -t filter -A "$FWD_CHAIN" -i "$TUN_IFACE" -o br-lan -p udp -d "$lan_net" -j ACCEPT
+      ipt -t filter -A "$FWD_CHAIN" -i "$target" -o br-lan -p udp -d "$lan_net" -j ACCEPT
     done
     ipt -t filter -A "$FWD_CHAIN" -j RETURN
     ipt -t filter -I FORWARD 1 -j "$FWD_CHAIN"
@@ -116,22 +144,34 @@ attach(){
     done
     ipt -t mangle -A "$CHAIN" -j RETURN
     ipt -t mangle -I PREROUTING 1 -i br-lan -j "$CHAIN"
+    printf '%s\n' "$target" >"$ACTIVE_TUN"
 }
 route_ok(){
+    target=${1:-$(selected_tun)}
     ipt -t mangle -C PREROUTING -i br-lan -j "$CHAIN" >/dev/null 2>&1 &&
     ipt -t filter -C FORWARD -j "$FWD_CHAIN" >/dev/null 2>&1 &&
-    "$IP" link show dev "$TUN_IFACE" >/dev/null 2>&1 &&
+    "$IP" link show dev "$target" >/dev/null 2>&1 &&
     "$IP" rule show | grep -Eq 'fwmark 0x2(/0x2)? lookup 101' &&
-    "$IP" route show table "$TABLE" | grep -q "^default dev $TUN_IFACE"
+    "$IP" route show table "$TABLE" | grep -q "^default dev $target"
 }
 json_status(){
-    active=false; healthy=false; hy2=false; upstream=false
+    active=false; healthy=false; hy2=false; mieru=false; fallback=false; upstream=false
+    selected=$(selected_tun)
     hy2_ok && hy2=true
+    mieru_ok && { mieru=true;fallback=true; }
     [ -f "$RUN/active" ] && active=true
-    [ "$active" = false ] || { [ "$hy2" = true ] && route_ok && healthy=true; }
+    if [ "$active" = true ]; then
+      if [ "$selected" = "$TUN_IFACE" ]; then
+        [ "$hy2" = true ] && route_ok "$selected" && healthy=true
+      else
+        [ "$mieru" = true ] && route_ok "$selected" && healthy=true
+      fi
+    fi
     [ -f "$RUN/upstream-ok" ] && upstream=true
-    printf '{"active":%s,"healthy":%s,"hy2":%s,"upstream_probe":%s,"mode":"hy2-tun","tun_interface":"%s","telegram_nets":%s,"telegram_dns_ips":%s,"discord_ips":%s,"discord_nets":%s,"dns_integration":%s}\n' \
-      "$active" "$healthy" "$hy2" "$upstream" "$TUN_IFACE" "$(count_set "$TG_NETS")" "$(count_set "$TG_DOMAINS")" "$(count_set "$DISCORD")" "$(count_set "$DISCORD_NETS")" "$([ -f "$DNS_CONF" ] && echo true || echo false)"
+    mode=hy2-tun
+    [ "$selected" = nsmieru ] && mode=mieru-tun
+    printf '{"active":%s,"healthy":%s,"hy2":%s,"mieru":%s,"fallback_ready":%s,"upstream_probe":%s,"mode":"%s","tun_interface":"%s","telegram_nets":%s,"telegram_dns_ips":%s,"discord_ips":%s,"discord_nets":%s,"dns_integration":%s}\n' \
+      "$active" "$healthy" "$hy2" "$mieru" "$fallback" "$upstream" "$mode" "$selected" "$(count_set "$TG_NETS")" "$(count_set "$TG_DOMAINS")" "$(count_set "$DISCORD")" "$(count_set "$DISCORD_NETS")" "$([ -f "$DNS_CONF" ] && echo true || echo false)"
 }
 spawn_guard(){
     ( exec "$0" guard ) </dev/null >/dev/null 2>&1 &
@@ -156,26 +196,57 @@ start)
     create_sets; load_telegram
     upstream_ok || die 'HY2 upstream probe through SOCKS5 failed; routing was not changed'
     date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
-    write_dns; attach; route_ok || die 'voice route health check failed'
+    if [ -x "$MIERU_TUN" ] && "$MIERU_TUN" start >/dev/null 2>&1; then
+      mieru_ok || "$MIERU_TUN" stop >/dev/null 2>&1 || true
+    fi
+    write_dns; attach "$TUN_IFACE"; route_ok "$TUN_IFACE" || die 'voice route health check failed'
     echo active >"$RUN/active"; stop_guard; spawn_guard
     trap - EXIT HUP INT TERM; unlock; json_status ;;
 stop)
     lock; trap unlock EXIT HUP INT TERM
-    stop_guard; detach; rm -f "$RUN/active" "$RUN/upstream-ok"
+    stop_guard; detach
+    [ ! -x "$MIERU_TUN" ] || "$MIERU_TUN" stop >/dev/null 2>&1 || true
+    rm -f "$RUN/active" "$RUN/upstream-ok"
     trap - EXIT HUP INT TERM; unlock; json_status ;;
 guard)
-    failures=0
+    failures=0;recoveries=0
     while [ -f "$RUN/active" ]; do
       sleep 10
-      if hy2_ok && route_ok && upstream_ok; then
-        failures=0; date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
+      selected=$(selected_tun)
+      if [ "$selected" = "$TUN_IFACE" ]; then
+        if hy2_ok && route_ok "$TUN_IFACE" && upstream_ok; then
+          failures=0; date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
+        else
+          failures=$((failures+1)); rm -f "$RUN/upstream-ok"
+        fi
+        if [ "$failures" -ge 2 ]; then
+          if [ -x "$MIERU_TUN" ] && "$MIERU_TUN" start >/dev/null 2>&1 && mieru_ok && mieru_upstream_ok; then
+            attach nsmieru; failures=0; recoveries=0; date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
+            logger -t netscope-voice 'HY2 failed; voice route moved to warm Mieru fallback'
+          else
+            detach
+            [ ! -x "$MIERU_TUN" ] || "$MIERU_TUN" stop >/dev/null 2>&1 || true
+            rm -f "$RUN/active" "$RUN/guard.pid" "$RUN/upstream-ok"
+            logger -t netscope-voice 'HY2 and Mieru unavailable; voice interception removed (fail open)'
+            exit 1
+          fi
+        fi
       else
-        failures=$((failures+1)); rm -f "$RUN/upstream-ok"
-      fi
-      if [ "$failures" -ge 2 ]; then
-        detach; rm -f "$RUN/active" "$RUN/guard.pid" "$RUN/upstream-ok"
-        logger -t netscope-voice 'HY2 or route unhealthy; voice interception removed (fail open)'
-        exit 1
+        if mieru_ok && route_ok nsmieru && mieru_upstream_ok; then
+          failures=0; date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
+        else
+          failures=$((failures+1)); rm -f "$RUN/upstream-ok"
+        fi
+        if hy2_ok && upstream_ok; then recoveries=$((recoveries+1)); else recoveries=0; fi
+        if [ "$recoveries" -ge 2 ]; then
+          attach "$TUN_IFACE"; failures=0; recoveries=0; date -u +%Y-%m-%dT%H:%M:%SZ >"$RUN/upstream-ok"
+          logger -t netscope-voice 'HY2 recovered; voice route returned to primary'
+        elif [ "$failures" -ge 2 ]; then
+          detach; "$MIERU_TUN" stop >/dev/null 2>&1 || true
+          rm -f "$RUN/active" "$RUN/guard.pid" "$RUN/upstream-ok"
+          logger -t netscope-voice 'HY2 and Mieru unavailable; voice interception removed (fail open)'
+          exit 1
+        fi
       fi
     done ;;
 *) die 'usage: netscope-voice-route {status|start|stop|guard}' ;;

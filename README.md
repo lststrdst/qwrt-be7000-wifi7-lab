@@ -41,7 +41,7 @@ BE7000 является моим основным домашним шлюзом.
 |---|---|---|
 | NETSCOPE UI | единая русская оболочка LuCI, вход, навигация и версия базы | исходники опубликованы в `luci-theme-netscope`; работает на тестовом роутере |
 | NETSCOPE Traffic | устройства, conntrack, направления, порты, счётчики и управляемые USB PCAP-сессии | исходники опубликованы в `luci-app-netscope`; Capture после установки выключен |
-| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray, Mieru и HY2 из вебки | для каждого протокола есть preflight, подтверждение, health check и отдельный rollback; Telegram/Discord UDP направляется в HY2 с opt-in автозапуском и fail-open |
+| VPN Quick setup | подготовка и явное включение WG, AWG, VLESS/Xray, Mieru и HY2 из вебки | импорт одной Mieru-ссылки без сохранения URI; Telegram/Discord UDP идёт через HY2 с прогретым Mieru-резервом, opt-in автозапуском и fail-open |
 | Voice health | текущие Telegram/Discord endpoint, маршрут, задержка, jitter, потери проб и история | метаданные и bounded-журнал на USB; payload звонка не записывается |
 | L2TP watchdog | контроль PPP, офисных маршрутов, MTU/MSS и ограниченное переподключение | универсальный сервис опубликован выключенным; приватный probe/routes/reconnect остаётся только на роутере |
 | IoT monitor | доказательства потери Wi‑Fi, DHCP, DNS, WAN или облака | опубликован read-only инструмент |

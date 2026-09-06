@@ -30,9 +30,10 @@ function M.tools()
     return {awg=candidates({'/usr/bin/awg','/usr/sbin/awg','/mnt/sda1/qwrt-services/amneziawg/bin/awg'}),
         wg=candidates({'/usr/bin/wg','/usr/sbin/wg'}),xray=candidates({'/usr/bin/xray','/usr/sbin/xray'}),mieru=candidates({'/usr/bin/mieru','/usr/sbin/mieru','/mnt/sda1/qwrt-services/mieru/bin/mieru'}),
         hysteria=candidates({'/usr/bin/hysteria','/usr/sbin/hysteria','/mnt/sda1/qwrt-services/hysteria/bin/hysteria'}),
-        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),mieru_installer=candidates({'/usr/libexec/netscope-install-mieru'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'}),
+        hev=candidates({'/mnt/sda1/qwrt-services/hev-socks5-tunnel/bin/hev-socks5-tunnel'}),
+        hysteria_installer=candidates({'/usr/libexec/netscope-install-hysteria'}),mieru_installer=candidates({'/usr/libexec/netscope-install-mieru'}),hev_installer=candidates({'/usr/libexec/netscope-install-hev'}),manager=candidates({'/usr/libexec/netscope-vpn-profile'}),
         voice_route=candidates({'/usr/libexec/netscope-voice-route'}),voice_update=candidates({'/usr/libexec/netscope-voice-update'}),
-        voice_monitor=candidates({'/usr/libexec/netscope-voice-monitor'}),voice_boot=candidates({'/usr/libexec/netscope-voice-boot'}),
+        voice_monitor=candidates({'/usr/libexec/netscope-voice-monitor'}),voice_boot=candidates({'/usr/libexec/netscope-voice-boot'}),mieru_tun=candidates({'/usr/libexec/netscope-mieru-tun'}),
         voice_init=candidates({'/etc/init.d/netscope-voice'}),l2tp_watchdog=candidates({'/usr/libexec/netscope-l2tp-watchdog'})}
 end
 local function inventory()
@@ -72,7 +73,7 @@ function M.status()
         need(span==1,'Некорректная маска сети');return cidr(address..'/'..bits).text end)
     if ok then lan=value end
     local t=M.tools();local live=inventory();return {version=M.VERSION,lan=lan,recommended_port=live.recommended_port,recommended_tunnel=live.recommended_tunnel,
-        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hysteria_installer=t.hysteria_installer~=nil,mieru_installer=t.mieru_installer~=nil,manager=t.manager~=nil,voice_route=t.voice_route~=nil,voice_update=t.voice_update~=nil,voice_monitor=t.voice_monitor~=nil,voice_boot=t.voice_boot~=nil,l2tp_watchdog=t.l2tp_watchdog~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
+        tools={awg=t.awg~=nil,wg=t.wg~=nil,xray=t.xray~=nil,mieru=t.mieru~=nil,hysteria=t.hysteria~=nil,hev=t.hev~=nil,hysteria_installer=t.hysteria_installer~=nil,mieru_installer=t.mieru_installer~=nil,hev_installer=t.hev_installer~=nil,manager=t.manager~=nil,voice_route=t.voice_route~=nil,voice_update=t.voice_update~=nil,voice_monitor=t.voice_monitor~=nil,voice_boot=t.voice_boot~=nil,mieru_tun=t.mieru_tun~=nil,l2tp_watchdog=t.l2tp_watchdog~=nil},storage=C.storage(),mode=t.manager and 'transactional-activation' or 'prepare-only',
         note=t.manager and 'Приватные черновики и независимое транзакционное включение WG, AWG, VLESS/Xray, Mieru и Hysteria 2. Каждый профиль использует только собственный интерфейс или loopback-порт.'
             or 'Создаёт и проверяет приватные черновики. Существующие VPN, межсетевой экран и маршруты не изменяются. Диспетчер включения не установлен.'}
 end
@@ -140,6 +141,40 @@ local function vless_plan(input,dir)
         note='Подготовлен отдельный локальный SOCKS-профиль. Он начнёт принимать подключения только после preflight и явного включения; автоматическая маршрутизация трафика не добавляется.'}
 end
 local function mieru_plan(input,dir)
+    local source=input.mieru_uri or ''
+    if source~='' then
+        need(type(source)=='string' and #source>=16 and #source<=12000,'Вставьте одну ссылку Mieru (не более 12 КБ)')
+        source=source:match('^%s*(.-)%s*$')
+        need((source:match('^mieru://') or source:match('^mierus://')) and not source:find('%s') and not source:find('%c'),'Ожидается одна ссылка mieru:// или mierus:// без пробелов')
+        local binary=need(M.tools().mieru,'Сначала установите Mieru runtime, чтобы безопасно разобрать ссылку')
+        local ok,decoded_text=P.exec({binary,'explain','config',source},6)
+        need(ok,'Mieru runtime не смог разобрать ссылку; исходные данные не сохранены')
+        local decoded=json.parse(decoded_text);need(type(decoded)=='table','Mieru вернул некорректную конфигурацию')
+        local profiles=decoded.profiles
+        if type(profiles)~='table' and decoded.profileName and decoded.user and decoded.servers then profiles={decoded} end
+        need(type(profiles)=='table' and #profiles==1,'Ссылка должна содержать ровно один профиль Mieru')
+        local profile=profiles[1];need(type(profile.profileName)=='string' and #profile.profileName>0 and #profile.profileName<=128 and not profile.profileName:find('%c'),'Некорректное имя профиля Mieru')
+        need(type(profile.user)=='table' and type(profile.user.name)=='string' and #profile.user.name>0 and #profile.user.name<=128 and not profile.user.name:find('%c'),'Некорректное имя пользователя Mieru')
+        need(type(profile.user.password)=='string' and #profile.user.password>0 and #profile.user.password<=512 and not profile.user.password:find('%c'),'Некорректный пароль Mieru')
+        need(type(profile.servers)=='table' and #profile.servers>=1 and #profile.servers<=16,'Профиль Mieru должен содержать от 1 до 16 серверов')
+        local udp=false
+        for _,server in ipairs(profile.servers) do
+            local address=server.ipAddress or server.domainName;host(address)
+            need(type(server.portBindings)=='table' and #server.portBindings>=1 and #server.portBindings<=16,'Сервер Mieru не содержит допустимых портов')
+            for _,binding in ipairs(server.portBindings) do
+                port(binding.port);need(binding.protocol=='TCP' or binding.protocol=='UDP','Ссылка Mieru содержит неподдерживаемый транспорт')
+                if binding.protocol=='UDP' then udp=true end
+            end
+        end
+        need(udp,'Для резерва голосовых вызовов профиль Mieru должен содержать UDP binding')
+        profile.mtu=tonumber(profile.mtu) or 1400;need(profile.mtu>=1280 and profile.mtu<=1500,'Некорректный MTU профиля Mieru')
+        decoded={profiles={profile},activeProfile=profile.profileName,rpcPort=8964,socks5Port=2082,socks5ListenLAN=false,loggingLevel='WARN'}
+        write(dir..'/mieru.json',json.stringify(decoded))
+        return {kind='mieru',protocol='Mieru UDP',state='DRAFT',validated=true,files={'mieru.json'},local_port=2082,
+            checks={'Штатный Mieru runtime разобрал одну ссылку и один профиль','Профиль содержит UDP binding для голосового резерва','SOCKS слушает только 127.0.0.1:2082','Исходная ссылка не записывалась в браузерное хранилище или план'},
+            planned_changes={'Запустить отдельный процесс Mieru из приватного черновика','Прогреть изолированный TUN nsmieru для автоматического резерва HY2','Маршрутизировать через резерв только помеченный Telegram/Discord voice UDP','Не менять main/default route, DNS, L2TP и другие VPN'},
+            note='Ссылка разобрана штатным Mieru и преобразована в приватный локальный SOCKS/UDP-профиль. После preflight и включения он может использоваться как прогретый резерв голосового маршрута.'}
+    end
     local endpoint=input.mieru_endpoint or '';local username=input.mieru_user or '';local password=input.mieru_password or ''
     local template=endpoint=='' and username=='' and password==''
     if template then endpoint='server.example.invalid';username='CHANGE_ME';password='CHANGE_ME'
@@ -237,7 +272,9 @@ function M.voice_status()
     local conf=C.read(C.ROOT..'/config/voice/autostart.conf',512) or ''
     local configured=conf:match('\nenabled=1\n') or conf:match('^enabled=1\n')
     local profile=conf:match('\nprofile=([^\r\n]+)') or conf:match('^profile=([^\r\n]+)')
+    local mieru_profile=conf:match('\nmieru_profile=([^\r\n]+)') or conf:match('^mieru_profile=([^\r\n]+)')
     value.autostart=configured~=nil and C.valid_id(profile or '') and fs.access('/etc/rc.d/S97netscope-voice') and true or false
+    value.fallback_autostart=value.autostart and C.valid_id(mieru_profile or '') or false
     return value
 end
 function M.voice_telemetry()
@@ -251,10 +288,12 @@ function M.voice_autostart(enable)
     local tools=M.tools();local boot=need(tools.voice_boot,'Сервис автозапуска HY2 не установлен');local init=need(tools.voice_init,'Init-сервис автозапуска HY2 не установлен')
     if enable then
         local live=runtime_status(tools.manager,'hy2');need(live.active and live.healthy and C.valid_id(live.id),'Сначала включите и проверьте конкретный профиль HY2')
-        local ok,out=P.exec({boot,'configure',live.id},5);need(ok,'Не удалось сохранить безопасный автозапуск: '..tostring(out):sub(1,160))
+        local reserve=runtime_status(tools.manager,'mieru');local args={boot,'configure',live.id}
+        if reserve.active and reserve.healthy and C.valid_id(reserve.id) then args[#args+1]=reserve.id end
+        local ok,out=P.exec(args,5);need(ok,'Не удалось сохранить безопасный автозапуск: '..tostring(out):sub(1,160))
         local enabled=P.exec({init,'enable'},5);if not enabled then P.exec({boot,'unconfigure'},3);error('Не удалось включить init-сервис') end
         local started,msg=P.exec({init,'start'},8);if not started then P.exec({init,'disable'},5);P.exec({boot,'unconfigure'},3);error('Init-сервис не запущен: '..tostring(msg):sub(1,160)) end
-        local value=M.voice_status();value.note='После загрузки сервис поднимет только выбранный HY2 и узкий голосовой маршрут. При ошибке voice policy снимается (fail-open).';return value
+        local value=M.voice_status();value.note=value.fallback_autostart and 'После загрузки сервис поднимет выбранный HY2, прогреет Mieru как резерв и включит узкий голосовой маршрут. Если оба канала недоступны, voice policy снимается (fail-open).' or 'После загрузки сервис поднимет выбранный HY2 и узкий голосовой маршрут. Резерв Mieru не выбран; при ошибке voice policy снимается (fail-open).';return value
     end
     P.exec({init,'stop'},25);P.exec({init,'disable'},5);P.exec({boot,'unconfigure'},3)
     local value=M.voice_status();value.note='Автозапуск выключен. Голосовой policy route снят; вручную запущенный HY2 не останавливается.';return value
@@ -276,7 +315,7 @@ function M.voice_activate()
     local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
     local ok,out=P.exec({route,'start'},35);need(ok,'Маршрутизация звонков не включена: '..tostring(out):sub(1,240))
     local value=json.parse(out);need(type(value)=='table' and value.active and value.healthy and value.hy2,'Маршрутизация звонков не достигла исправного состояния')
-    value.note='Telegram relay и динамические Discord voice IP направляются через HY2 TUN. Другой UDP, Steam/Dota, L2TP и системный default route не изменены.';return value
+    value.note=value.fallback_ready and 'Telegram relay и Discord voice UDP направляются через HY2; Mieru прогрет как автоматический резерв. Другой UDP, Steam/Dota, L2TP и системный default route не изменены.' or 'Telegram relay и Discord voice UDP направляются через HY2. Резерв Mieru не готов; при сбое правило будет снято fail-open.';return value
 end
 function M.voice_deactivate()
     local route=need(M.tools().voice_route,'Диспетчер voice routing не установлен')
@@ -299,6 +338,14 @@ function M.install_mieru()
     local ok,out=P.exec({installer},120);need(ok,'Установка Mieru не выполнена: '..tostring(out):sub(1,240))
     local installed=M.tools().mieru;need(installed~=nil,'Установщик завершился без доступного runtime')
     return {installed=true,path=installed,version='v3.36.1',note='Официальный Mieru v3.36.1 проверен по закреплённому SHA-256 и установлен на USB. Процесс, профиль, маршруты и firewall не запускались.'}
+end
+function M.install_hev()
+    local tools=M.tools();need(not tools.hev,'Mieru TUN adapter уже установлен')
+    local installer=need(tools.hev_installer,'Проверенный установщик Mieru TUN adapter отсутствует')
+    local storage=C.storage(true);need(storage.mounted and storage.writable and not storage.error and storage.free>8388608,'Требуется writable USB со свободными 8 МиБ')
+    local ok,out=P.exec({installer},120);need(ok,'Установка Mieru TUN adapter не выполнена: '..tostring(out):sub(1,240))
+    local installed=M.tools().hev;need(installed~=nil,'Установщик завершился без доступного runtime')
+    return {installed=true,path=installed,version='2.17.0',note='Официальный hev-socks5-tunnel 2.17.0 проверен по SHA-256 и установлен на USB. Интерфейсы, процессы, маршруты и firewall не запускались.'}
 end
 function M.list()
     local storage=C.storage();if not storage.mounted or storage.error then return {} end

@@ -39,9 +39,12 @@ define Package/luci-app-netscope-setup/install
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-vpn-profile $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-hysteria $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-mieru $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-hev $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-update $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-route $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-hy2-udp-probe $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-tun-udp-probe $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/netscope-mieru-tun $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-monitor $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-voice-boot $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-l2tp-watchdog $(1)/usr/libexec/

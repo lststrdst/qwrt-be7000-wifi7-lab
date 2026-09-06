@@ -56,7 +56,10 @@ class FirmwareSourceTests(unittest.TestCase):
             'usr/libexec/netscope-vpn-profile',
             'usr/libexec/netscope-install-hysteria',
             'usr/libexec/netscope-install-mieru',
+            'usr/libexec/netscope-install-hev',
             'usr/libexec/netscope-hy2-udp-probe',
+            'usr/libexec/netscope-tun-udp-probe',
+            'usr/libexec/netscope-mieru-tun',
             'usr/libexec/netscope-voice-route',
             'usr/libexec/netscope-voice-update',
             'usr/libexec/netscope-voice-monitor',
@@ -84,6 +87,7 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertNotIn('sessionStorage', js)
         self.assertIn("params.set('token'", js)
         self.assertIn('AbortController', js)
+        self.assertIn("el('mieru-uri').value=''", js)
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')
         for forbidden in ('uci commit', 'wg-quick up', 'network restart', 'firewall restart'):
             self.assertNotIn(forbidden, model)
@@ -145,7 +149,7 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn("DISCORD_VOICE_NETS='66.22.192.0/18 104.29.128.0/19'", route)
         self.assertIn('ns_voice_telegram_nets', route)
         self.assertIn('discord.media', route)
-        self.assertIn('route add default dev "$TUN_IFACE" table "$TABLE"', route)
+        self.assertIn('route add default dev "$target" table "$TABLE"', route)
         self.assertIn('-j MARK --set-xmark "$MARK"', route)
         self.assertIn('-m mark --mark "$MARK" -j ACCEPT', route)
         self.assertIn('"discord_nets":%s', route)
@@ -154,7 +158,12 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('/usr/libexec/netscope-hy2-udp-probe', route)
         self.assertIn("os.getenv('NETSCOPE_SOCKS_PORT')", probe)
         self.assertIn('sleep 10', route)
-        self.assertIn("HY2 or route unhealthy; voice interception removed (fail open)", route)
+        self.assertIn('attach nsmieru', route)
+        self.assertIn('HY2 failed; voice route moved to warm Mieru fallback', route)
+        self.assertIn('HY2 recovered; voice route returned to primary', route)
+        self.assertIn('HY2 and Mieru unavailable; voice interception removed (fail open)', route)
+        self.assertIn('route add default dev "$target" table "$TABLE"', route)
+        self.assertNotIn('route add default via', route)
 
     def test_voice_autostart_and_l2tp_watchdog_are_opt_in_and_scoped(self):
         boot = (FILES/'usr/libexec/netscope-voice-boot').read_text(encoding='utf-8')
@@ -170,6 +179,8 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertIn('fail-open', boot)
         self.assertNotIn('network restart', boot)
         self.assertNotIn('firewall restart', boot)
+        self.assertIn('mieru_profile=', boot)
+        self.assertIn('ensure_profile mieru', boot)
         self.assertIn('health.jsonl', monitor)
         self.assertIn('MAX_HISTORY', monitor)
         self.assertIn('/proc/net/nf_conntrack', monitor)
@@ -215,5 +226,32 @@ class FirmwareSourceTests(unittest.TestCase):
         self.assertNotIn('eval ', installer)
         self.assertNotIn('/etc/init.d/', installer)
         self.assertNotIn('iptables', installer)
+
+    def test_mieru_voice_adapter_is_pinned_scoped_and_imports_one_udp_link(self):
+        installer = (FILES/'usr/libexec/netscope-install-hev').read_text(encoding='utf-8')
+        adapter = (FILES/'usr/libexec/netscope-mieru-tun').read_text(encoding='utf-8')
+        probe = (FILES/'usr/libexec/netscope-tun-udp-probe').read_text(encoding='utf-8')
+        model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')
+        controller = (FILES/'usr/lib/lua/luci/controller/netscope_setup.lua').read_text(encoding='utf-8')
+        self.assertIn('VERSION=2.17.0', installer)
+        self.assertIn('SHA256=5aa123bfca72d39ef3c01bad9cfe4a7a5030d04ba93b20b79e185e00dcda1781', installer)
+        self.assertIn('hev-socks5-tunnel-linux-arm64', installer)
+        for forbidden in ('| sh', 'eval ', '/etc/init.d/', 'iptables'):
+            self.assertNotIn(forbidden, installer)
+        self.assertIn('IFACE=nsmieru', adapter)
+        self.assertIn('ADDRESS=198.18.20.1', adapter)
+        self.assertIn('TABLE=103', adapter)
+        self.assertIn('rule add from "$ADDRESS/32" table "$TABLE"', adapter)
+        self.assertIn('port: 2082', adapter)
+        self.assertNotIn('table main', adapter)
+        self.assertNotIn('network restart', adapter)
+        self.assertIn("udp: 'udp'", adapter)
+        self.assertIn("udp:bind('198.18.20.1',0)", probe)
+        self.assertIn("source:match('^mieru://')", model)
+        self.assertIn("source:match('^mierus://')", model)
+        self.assertIn("binary,'explain','config',source", model)
+        self.assertIn("need(udp,'Для резерва голосовых вызовов", model)
+        self.assertIn("'mieru_uri'", controller)
+        self.assertNotIn("..tostring(decoded_text)", model)
 
 if __name__ == '__main__': unittest.main()

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Opt-in HY2/voice boot reconciler. fail-open: any failure leaves ordinary routing in place.
+# Opt-in HY2/Mieru voice boot reconciler. fail-open leaves ordinary routing in place.
 set -eu
 umask 077
 ROOT=${NETSCOPE_VOICE_ROOT:-/mnt/sda1/NETSCOPE}
@@ -10,25 +10,50 @@ ROUTE=${NETSCOPE_VOICE_ROUTE:-/usr/libexec/netscope-voice-route}
 
 valid_id(){ printf '%s\n' "$1" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-fA-F]{10}$'; }
 profile(){ sed -n 's/^profile=//p' "$CONF" 2>/dev/null | head -n1; }
+mieru_profile(){ sed -n 's/^mieru_profile=//p' "$CONF" 2>/dev/null | head -n1; }
 enabled(){ [ "$(sed -n 's/^enabled=//p' "$CONF" 2>/dev/null | head -n1)" = 1 ]; }
-active_id(){ "$MANAGER" status hy2 2>/dev/null | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'; }
+active_id(){ "$MANAGER" status "$1" 2>/dev/null | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'; }
 is_true(){ printf '%s' "$1" | grep -q "\"$2\":true"; }
-cleanup(){ "$ROUTE" stop >/dev/null 2>&1 || true;[ ! -f "$RUN/owned-profile" ] || { id=$(cat "$RUN/owned-profile" 2>/dev/null || true);valid_id "$id" && "$MANAGER" stop hy2 "$id" >/dev/null 2>&1 || true; };rm -f "$RUN/owned-profile"; }
+cleanup(){
+  "$ROUTE" stop >/dev/null 2>&1 || true
+  for kind in hy2 mieru; do
+    marker="$RUN/owned-$kind-profile"
+    [ ! -f "$marker" ] || { id=$(cat "$marker" 2>/dev/null || true); valid_id "$id" && "$MANAGER" stop "$kind" "$id" >/dev/null 2>&1 || true; }
+    rm -f "$marker"
+  done
+  [ ! -f "$RUN/owned-profile" ] || { id=$(cat "$RUN/owned-profile" 2>/dev/null || true); valid_id "$id" && "$MANAGER" stop hy2 "$id" >/dev/null 2>&1 || true; }
+  rm -f "$RUN/owned-profile"
+}
 configure(){
-  id=${2:-};valid_id "$id" || { echo 'invalid HY2 profile id' >&2;exit 2; }
+  id=${2:-};reserve=${3:-};valid_id "$id" || { echo 'invalid HY2 profile id' >&2;exit 2; }
   [ -f "$ROOT/config/setup/$id/hysteria.yaml" ] && [ ! -L "$ROOT/config/setup/$id/hysteria.yaml" ] || { echo 'HY2 profile unavailable' >&2;exit 2; }
-  mkdir -p "$ROOT/config/voice";chmod 700 "$ROOT/config/voice";tmp=$CONF.new;printf 'enabled=1\nprofile=%s\n' "$id" >"$tmp";chmod 600 "$tmp";mv "$tmp" "$CONF"
+  if [ -n "$reserve" ]; then
+    valid_id "$reserve" || { echo 'invalid Mieru profile id' >&2;exit 2; }
+    [ -f "$ROOT/config/setup/$reserve/mieru.json" ] && [ ! -L "$ROOT/config/setup/$reserve/mieru.json" ] || { echo 'Mieru profile unavailable' >&2;exit 2; }
+  fi
+  mkdir -p "$ROOT/config/voice";chmod 700 "$ROOT/config/voice";tmp=$CONF.new
+  printf 'enabled=1\nprofile=%s\n' "$id" >"$tmp"
+  [ -z "$reserve" ] || printf 'mieru_profile=%s\n' "$reserve" >>"$tmp"
+  chmod 600 "$tmp";mv "$tmp" "$CONF"
+}
+ensure_profile(){
+  kind=$1; id=$2; required=$3; marker="$RUN/owned-$kind-profile"; live=$(active_id "$kind"); state=$($MANAGER status "$kind" 2>/dev/null || true)
+  if [ -n "$live" ] && [ "$live" != "$id" ]; then
+    logger -t netscope-voice "autostart did not replace another active $kind profile"
+    [ "$required" = 0 ] && return 1 || return 2
+  fi
+  if is_true "$state" active && is_true "$state" healthy; then return 0; fi
+  if [ -f "$marker" ] && [ "$live" = "$id" ]; then "$MANAGER" stop "$kind" "$id" >/dev/null 2>&1 || true; fi
+  started=$($MANAGER start "$kind" "$id" 2>/dev/null) || return 1
+  is_true "$started" healthy || { "$MANAGER" rollback "$kind" "$id" >/dev/null 2>&1 || true;return 1; }
+  "$MANAGER" confirm "$kind" "$id" >/dev/null 2>&1 || { "$MANAGER" rollback "$kind" "$id" >/dev/null 2>&1 || true;return 1; }
+  printf '%s\n' "$id" >"$marker"
 }
 reconcile(){
   enabled || return 1;id=$(profile);valid_id "$id" || return 1
-  state=$($MANAGER status hy2 2>/dev/null || true);live=$(active_id)
-  if [ -n "$live" ] && [ "$live" != "$id" ];then "$ROUTE" stop >/dev/null 2>&1 || true;logger -t netscope-voice 'autostart did not replace another active HY2 profile';return 1;fi
-  if ! is_true "$state" active || ! is_true "$state" healthy;then
-    if [ -f "$RUN/owned-profile" ] && [ "$live" = "$id" ];then "$MANAGER" stop hy2 "$id" >/dev/null 2>&1 || true;fi
-    started=$($MANAGER start hy2 "$id" 2>/dev/null) || return 1;is_true "$started" healthy || { "$MANAGER" rollback hy2 "$id" >/dev/null 2>&1 || true;return 1; }
-    "$MANAGER" confirm hy2 "$id" >/dev/null 2>&1 || { "$MANAGER" rollback hy2 "$id" >/dev/null 2>&1 || true;return 1; }
-    printf '%s\n' "$id" >"$RUN/owned-profile"
-  fi
+  ensure_profile hy2 "$id" 1 || { "$ROUTE" stop >/dev/null 2>&1 || true;return 1; }
+  reserve=$(mieru_profile)
+  if [ -n "$reserve" ] && valid_id "$reserve"; then ensure_profile mieru "$reserve" 0 || logger -t netscope-voice 'Mieru reserve unavailable; HY2 remains primary'; fi
   route=$($ROUTE status 2>/dev/null || true);is_true "$route" active && is_true "$route" healthy && return 0
   "$ROUTE" stop >/dev/null 2>&1 || true
   "$ROUTE" start >/dev/null 2>&1
@@ -39,4 +64,4 @@ daemon(){
   while enabled;do if reconcile;then sleep 15;else "$ROUTE" stop >/dev/null 2>&1 || true;sleep 60;fi;done
   cleanup
 }
-case "${1:-}" in configure) configure "$@";; unconfigure) rm -f "$CONF";; daemon) daemon;; cleanup) mkdir -p "$RUN";cleanup;; *) echo 'usage: netscope-voice-boot {configure ID|unconfigure|daemon|cleanup}' >&2;exit 2;;esac
+case "${1:-}" in configure) configure "$@";; unconfigure) rm -f "$CONF";; daemon) daemon;; cleanup) mkdir -p "$RUN";cleanup;; *) echo 'usage: netscope-voice-boot {configure HY2_ID [MIERU_ID]|unconfigure|daemon|cleanup}' >&2;exit 2;;esac

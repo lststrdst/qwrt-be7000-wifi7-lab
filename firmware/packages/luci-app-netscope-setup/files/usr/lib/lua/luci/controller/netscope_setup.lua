@@ -11,6 +11,7 @@ function index()
     entry({'admin','services','netscope_setup','download'},call('download')).leaf=true
     entry({'admin','services','netscope_setup','install_hysteria'},post('install_hysteria')).leaf=true
     entry({'admin','services','netscope_setup','install_mieru'},post('install_mieru')).leaf=true
+    entry({'admin','services','netscope_setup','install_hev'},post('install_hev')).leaf=true
     entry({'admin','services','netscope_setup','voice_status'},call('voice_status')).leaf=true
     entry({'admin','services','netscope_setup','voice_update'},post('voice_update')).leaf=true
     entry({'admin','services','netscope_setup','voice_activate'},post('voice_activate')).leaf=true
@@ -37,7 +38,7 @@ local function locked(action)
     if not ok then h.status(400,'Ошибка запроса');h.write_json({error=tostring(result):match(':%d+: (.*)') or 'Запрос завершился ошибкой'}) else h.write_json(result) end
 end
 function prepare()
-    locked(function(h)local input={};for _,key in ipairs({'kind','endpoint','port','tunnel','lan','profile','mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password','hy2_uri'}) do input[key]=h.formvalue(key) end
+    locked(function(h)local input={};for _,key in ipairs({'kind','endpoint','port','tunnel','lan','profile','mieru_uri','mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password','hy2_uri'}) do input[key]=h.formvalue(key) end
         return require('luci.model.netscope_setup').prepare(input) end)
 end
 function preflight()locked(function(h)return require('luci.model.netscope_setup').preflight(h.formvalue('draft'))end)end
@@ -46,6 +47,7 @@ function deactivate()locked(function(h)return require('luci.model.netscope_setup
 function delete()locked(function(h)return require('luci.model.netscope_setup').delete(h.formvalue('draft'))end)end
 function install_hysteria()locked(function()return require('luci.model.netscope_setup').install_hysteria()end)end
 function install_mieru()locked(function()return require('luci.model.netscope_setup').install_mieru()end)end
+function install_hev()locked(function()return require('luci.model.netscope_setup').install_hev()end)end
 function voice_status()local h=headers();h.prepare_content('application/json');h.write_json(require('luci.model.netscope_setup').voice_status())end
 function voice_update()locked(function()return require('luci.model.netscope_setup').voice_update()end)end
 function voice_activate()locked(function()return require('luci.model.netscope_setup').voice_activate()end)end

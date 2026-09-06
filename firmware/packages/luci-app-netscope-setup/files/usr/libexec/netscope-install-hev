@@ -1,0 +1,47 @@
+#!/bin/sh
+# Install one pinned official hev-socks5-tunnel ARM64 runtime on USB. Never starts it.
+set -eu
+umask 077
+
+VERSION=2.17.0
+SHA256=5aa123bfca72d39ef3c01bad9cfe4a7a5030d04ba93b20b79e185e00dcda1781
+URL=https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.0/hev-socks5-tunnel-linux-arm64
+ROOT=/mnt/sda1/qwrt-services/hev-socks5-tunnel
+DEST=$ROOT/bin/hev-socks5-tunnel
+TEMP=$ROOT/.hev-socks5-tunnel-$VERSION.$$
+
+die(){ echo "netscope-install-hev: $*" >&2;exit 1; }
+cleanup(){ rm -f "$TEMP" 2>/dev/null || true; }
+trap cleanup EXIT HUP INT TERM
+
+case "$(uname -m)" in aarch64|arm64) :;; *) die 'unsupported architecture; aarch64 required';;esac
+grep -qE '^[^ ]+ /mnt/sda1 [^ ]+ rw(,| )' /proc/mounts || die 'writable /mnt/sda1 is required'
+for path in /mnt/sda1/qwrt-services "$ROOT" "$ROOT/bin";do [ ! -L "$path" ] || die 'symlink in destination path';done
+mkdir -p "$ROOT/bin";chmod 700 "$ROOT" "$ROOT/bin"
+command -v sha256sum >/dev/null 2>&1 || die 'sha256sum is required'
+
+if [ -f "$DEST" ] && [ ! -L "$DEST" ];then
+  installed_hash=$(sha256sum "$DEST" | awk '{print $1}')
+  [ "$installed_hash" = "$SHA256" ] && { echo "HEV_RUNTIME=READY VERSION=$VERSION";exit 0; }
+  die 'another hev-socks5-tunnel runtime already exists; refusing to overwrite it'
+fi
+[ ! -e "$DEST" ] && [ ! -e "$TEMP" ] || die 'unsafe destination or temporary object'
+free_kb=$(df -Pk /mnt/sda1 | awk 'NR==2 {print $4}')
+case "$free_kb" in ''|*[!0-9]*) die 'cannot determine free USB space';;esac
+[ "$free_kb" -ge 8192 ] || die 'at least 8 MiB free USB space is required'
+
+if command -v uclient-fetch >/dev/null 2>&1;then
+  uclient-fetch -q -O "$TEMP" "$URL"
+elif command -v curl >/dev/null 2>&1;then
+  curl --fail --location --silent --show-error --output "$TEMP" "$URL"
+elif command -v wget >/dev/null 2>&1;then
+  wget -q -O "$TEMP" "$URL"
+else
+  die 'uclient-fetch, curl or wget is required'
+fi
+
+actual=$(sha256sum "$TEMP" | awk '{print $1}')
+[ "$actual" = "$SHA256" ] || die 'downloaded binary checksum mismatch'
+chmod 700 "$TEMP";mv "$TEMP" "$DEST"
+trap - EXIT HUP INT TERM
+echo "HEV_RUNTIME=INSTALLED VERSION=$VERSION"

@@ -1,0 +1,44 @@
+#!/bin/sh
+# Isolated, source-probed TUN adapter for an already active local Mieru SOCKS5 client.
+set -eu
+umask 077
+
+RUN=${NETSCOPE_VOICE_RUN:-/tmp/netscope-voice}/mieru-tun
+MANAGER=${NETSCOPE_VPN_MANAGER:-/usr/libexec/netscope-vpn-profile}
+HEV=${NETSCOPE_HEV_RUNTIME:-/mnt/sda1/qwrt-services/hev-socks5-tunnel/bin/hev-socks5-tunnel}
+PROBE=${NETSCOPE_MIERU_TUN_PROBE:-/usr/libexec/netscope-tun-udp-probe}
+IP=${NETSCOPE_VOICE_IP:-/sbin/ip}
+IFACE=nsmieru
+ADDRESS=198.18.20.1
+TABLE=103
+PREF=98
+
+die(){ echo "netscope-mieru-tun: $*" >&2;exit 1; }
+pid_alive(){ [ -s "$RUN/pid" ] || return 1;pid=$(cat "$RUN/pid");case "$pid" in *[!0-9]*|'') return 1;;esac;kill -0 "$pid" 2>/dev/null; }
+manager_ok(){ state=$($MANAGER status mieru 2>/dev/null)||return 1;echo "$state"|grep -q '"active":true'&&echo "$state"|grep -q '"healthy":true'; }
+route_ok(){ "$IP" link show dev "$IFACE" >/dev/null 2>&1&&"$IP" rule show|grep -Eq "from $ADDRESS(/32)? lookup $TABLE"&&"$IP" route show table "$TABLE"|grep -q "^default dev $IFACE"; }
+healthy(){ pid_alive&&manager_ok&&route_ok; }
+drop_probe_route(){ while "$IP" rule del from "$ADDRESS/32" table "$TABLE" pref "$PREF" 2>/dev/null;do :;done;"$IP" route flush table "$TABLE" 2>/dev/null||true; }
+stop_process(){ pid_alive||return 0;pid=$(cat "$RUN/pid");kill "$pid" 2>/dev/null||true;n=0;while kill -0 "$pid" 2>/dev/null&&[ "$n" -lt 10 ];do sleep 1;n=$((n+1));done;kill -9 "$pid" 2>/dev/null||true; }
+cleanup(){ drop_probe_route;stop_process;rm -f "$RUN/pid" "$RUN/active" "$RUN/config.yml"; }
+status(){ active=false;ok=false;[ -f "$RUN/active" ]&&active=true;healthy&&ok=true;printf '{"active":%s,"healthy":%s,"interface":"%s","source":"%s","table":%s}\n' "$active" "$ok" "$IFACE" "$ADDRESS" "$TABLE"; }
+write_config(){
+  mkdir -p "$RUN";chmod 700 "$RUN";tmp=$RUN/config.yml.new
+  {
+    echo 'tunnel:';echo "  name: $IFACE";echo '  mtu: 1380';echo '  multi-queue: false';echo "  ipv4: $ADDRESS";echo "  icmp: 'off'"
+    echo 'socks5:';echo '  port: 2082';echo '  address: 127.0.0.1';echo "  udp: 'udp'"
+    echo 'misc:';echo '  task-stack-size: 32768';echo '  tcp-buffer-size: 8192';echo '  udp-recv-buffer-size: 262144';echo '  udp-copy-buffer-nums: 16';echo '  max-session-count: 1024';echo '  connect-timeout: 8000';echo '  tcp-read-write-timeout: 300000';echo '  udp-read-write-timeout: 60000';echo '  log-file: null';echo '  log-level: warn'
+  } >"$tmp";chmod 600 "$tmp";mv "$tmp" "$RUN/config.yml"
+}
+start(){
+  [ -x "$MANAGER" ]&&[ -x "$HEV" ]&&[ -x "$PROBE" ]||die 'required Mieru TUN tools unavailable';manager_ok||die 'active healthy Mieru profile required'
+  if healthy;then status;return 0;fi
+  cleanup;[ ! -e "/sys/class/net/$IFACE" ]||die 'dedicated TUN already exists';write_config
+  trap 'cleanup' EXIT HUP INT TERM
+  "$HEV" "$RUN/config.yml" </dev/null >/dev/null 2>&1&echo $! >"$RUN/pid"
+  n=0;while ! "$IP" link show dev "$IFACE" >/dev/null 2>&1&&[ "$n" -lt 8 ];do sleep 1;n=$((n+1));done
+  "$IP" link show dev "$IFACE" >/dev/null 2>&1||die 'Mieru TUN did not appear'
+  "$IP" rule add from "$ADDRESS/32" table "$TABLE" pref "$PREF";"$IP" route add default dev "$IFACE" table "$TABLE"
+  "$PROBE" >/dev/null||die 'Mieru TUN UDP warm-up failed';echo active >"$RUN/active";trap - EXIT HUP INT TERM;status
+}
+case "${1:-status}" in start) start;;stop) cleanup;status;;probe) healthy&&"$PROBE";;status) status;;*) die 'usage: netscope-mieru-tun {start|stop|probe|status}';;esac

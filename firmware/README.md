@@ -37,10 +37,14 @@ LuCI-приложение **VPN Quick setup**:
 - для VLESS/Mieru использует отдельные loopback SOCKS-процессы, а для HY2 —
   loopback SOCKS и изолированный TUN без автоматических маршрутов;
 - у каждого runtime есть preflight, подтверждение и watchdog rollback;
+- принимает одну `mieru://`/`mierus://` ссылку в вебке, валидирует один UDP-профиль
+  штатным runtime и не сохраняет исходную ссылку в plan/browser storage;
 - отдельной кнопкой добавляет только Telegram/Discord UDP → HY2 TUN через
   timeout-ipset, собственные mark/table/filter-chain и fail-open watchdog;
-- после явного opt-in восстанавливает выбранный HY2 и голосовой route при boot,
-  но при любой ошибке сначала возвращает обычную маршрутизацию;
+- держит Mieru/`nsmieru` прогретым резервом, после двух ошибок HY2 переключает
+  только таблицу 101 и возвращает HY2 после восстановления;
+- после явного opt-in восстанавливает выбранные HY2/Mieru и голосовой route при
+  boot, но при отказе обоих путей сначала возвращает обычную маршрутизацию;
 - хранит bounded-историю RTT/jitter/loss UDP-проб и видимых voice endpoint;
 - содержит выключенный по умолчанию L2TP watchdog с приватной конфигурацией на
   USB: PPP health, MTU 1400, MSS 1360 и scoped reconnect;
