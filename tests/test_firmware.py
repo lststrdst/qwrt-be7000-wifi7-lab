@@ -136,6 +136,7 @@ class FirmwareSourceTests(unittest.TestCase):
             'etc/init.d/netscope-voice',
             'etc/init.d/netscope-l2tp-watchdog',
             'www/luci-static/netscope/setup.js',
+            'www/luci-static/netscope/setup.css',
         }
         actual = {p.relative_to(FILES).as_posix() for p in FILES.rglob('*') if p.is_file()}
         self.assertEqual(expected, actual)
@@ -182,6 +183,46 @@ class FirmwareSourceTests(unittest.TestCase):
         for protocol in ('wg', 'awg', 'vless', 'mieru', 'hy2'):
             self.assertIn('value="'+protocol+'"', view)
         self.assertIn('явного подтверждения', view)
+
+    def test_easy_setup_is_scoped_and_preserves_form_contract(self):
+        view = (FILES/'usr/lib/lua/luci/view/netscope/setup.htm').read_text(encoding='utf-8')
+        script = (FILES/'www/luci-static/netscope/setup.js').read_text(encoding='utf-8')
+        css = (FILES/'www/luci-static/netscope/setup.css').read_text(encoding='utf-8')
+        ids = re.findall(r'\bid="([^"]+)"', view)
+        self.assertEqual(len(ids), len(set(ids)))
+        for key in ('home', 'vpn', 'voice'):
+            self.assertIn(f'data-scenario="{key}"', view)
+        for key in ('wg', 'awg', 'vless', 'mieru', 'hy2'):
+            self.assertIn(f'data-kind="{key}"', view)
+        for key in ('endpoint','port','tunnel','lan','hy2_uri','profile','mieru_uri',
+                    'mieru_endpoint','mieru_port','mieru_transport','mieru_user','mieru_password'):
+            self.assertIn(f'name="{key}"', view)
+        for key in re.findall(r"el\('([^']+)'\)", script):
+            self.assertIn('ns-setup-'+key, ids)
+        self.assertIn('[hidden]{display:none!important}', css)
+        self.assertIn('nsq-native{display:none!important}', css)
+        self.assertIn('grid-template-columns:minmax(0,1.52fr)', css)
+        self.assertIn('voiceUnavailable', script)
+        self.assertIn('l2tpUnavailable', script)
+        self.assertIn('Не удалось загрузить подключения.', script)
+        self.assertIn('Не удалось проверить USB и компоненты.', script)
+        self.assertIn('#ns-setup-prepare{width:100%!important}', css)
+        self.assertIn("metric(name,null)", script)
+        self.assertIn('Контрольные UDP-пробы, не задержка текущего звонка.', view)
+        self.assertIn('setup.css', (PACKAGE/'Makefile').read_text())
+        # Scenario selection changes only the form; no POST or direct routing.
+        scenario = script.split("for(const button of scenarioButtons)button.addEventListener",1)[1].split("\n",1)[0]
+        self.assertNotIn('post(', scenario)
+        self.assertNotIn('api(', scenario)
+
+    def test_native_actions_keep_stock_handlers(self):
+        script = (THEME/'www/luci-static/netscope/netscope.js').read_text(encoding='utf-8')
+        css = (THEME/'www/luci-static/netscope/netscope.css').read_text(encoding='utf-8')
+        self.assertIn("field.classList.add('ns-inline-actions')", script)
+        self.assertIn("field.closest('#netscope-setup')", script)
+        self.assertIn('cbi-page-actions{display:flex', css)
+        self.assertIn('gap:12px', css)
+        self.assertNotIn('sync_clock(', script)
 
     def test_hysteria2_draft_has_loopback_socks_isolated_tun_and_tls_guard(self):
         model = (FILES/'usr/lib/lua/luci/model/netscope_setup.lua').read_text(encoding='utf-8')

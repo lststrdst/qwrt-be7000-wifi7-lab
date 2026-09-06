@@ -156,6 +156,16 @@
         }
       }
     }
+    // Layout-only grouping. Keep native clock/actions and their handlers intact.
+    if (document.body.classList.contains('logged-in')) {
+      document.querySelectorAll('.cbi-value-field').forEach(function (field) {
+        if (field.closest('#netscope-setup')) return;
+        var inlineAction = Array.prototype.some.call(field.children, function (child) {
+          return child.matches('button, input[type="button"], input[type="submit"]');
+        });
+        if (inlineAction) field.classList.add('ns-inline-actions');
+      });
+    }
     // Keep the stock LuCI password parser and CSRF form. This only adds a
     // nearby native submit control on the unusually long Administration page.
     if (document.body.classList.contains('logged-in') && location.pathname.replace(/\/$/,'').endsWith('/admin/system/admin')) {

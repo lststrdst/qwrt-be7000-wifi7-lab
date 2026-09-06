@@ -35,6 +35,7 @@ define Package/luci-app-netscope-setup/install
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/netscope $(1)/www/luci-static/netscope
 	$(INSTALL_DATA) ./files/usr/lib/lua/luci/view/netscope/setup.htm $(1)/usr/lib/lua/luci/view/netscope/
 	$(INSTALL_DATA) ./files/www/luci-static/netscope/setup.js $(1)/www/luci-static/netscope/
+	$(INSTALL_DATA) ./files/www/luci-static/netscope/setup.css $(1)/www/luci-static/netscope/
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-vpn-profile $(1)/usr/libexec/
 	$(INSTALL_BIN) ./files/usr/libexec/netscope-install-hysteria $(1)/usr/libexec/
