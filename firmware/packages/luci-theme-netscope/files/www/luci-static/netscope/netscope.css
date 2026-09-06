@@ -141,3 +141,46 @@ body.netscope[data-theme]{
   .netscope #maincontent>.container{margin:22px 14px}.netscope .cbi-page-actions{display:flex;flex-wrap:wrap;gap:6px}.netscope .cbi-value-field{max-width:100%}
 }
 @media(prefers-reduced-motion:reduce){.netscope *{transition:none!important;scroll-behavior:auto!important}}
+
+/* Quick Setup uses explicit layout primitives so long notes never collide with actions. */
+.netscope #netscope-setup{max-width:1480px;color:var(--ns-text)}
+.netscope #netscope-setup>h2{margin-bottom:12px}
+.netscope #netscope-setup>.cbi-map-descr{margin:0 0 20px;max-width:1080px;font-size:13px}
+.netscope #netscope-setup>.alert-message{margin:0 0 14px}
+.netscope #ns-setup-status{display:flex;align-items:center;min-height:38px;margin:0 0 14px;padding:0 14px;border:1px solid #3f4d41;border-radius:8px;background:#232b24;color:#cff7d3;font-size:12px}
+.netscope #ns-setup-runtime-actions{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin:0 0 18px;padding:12px 14px;border:1px solid #454545;border-radius:10px;background:#252525}
+.netscope #ns-setup-runtime-actions>span{display:flex;flex:1 1 320px;min-width:260px;align-items:center;gap:9px;flex-wrap:wrap;color:var(--ns-muted);font-size:12px;line-height:1.5}
+.netscope #ns-setup-runtime-actions>span>span{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.netscope #netscope-setup form .cbi-section,.netscope #netscope-setup>fieldset.cbi-section{padding:24px 22px;margin:0 0 20px;overflow:visible;border:1px solid #444;background:var(--ns-panel);box-shadow:0 8px 24px #0002}
+.netscope #netscope-setup .cbi-section>legend{padding:0 8px;margin-left:-8px;font-size:17px;color:var(--ns-text);background:var(--ns-panel)}
+.netscope #netscope-setup .cbi-section>.cbi-map-descr{max-width:1120px;margin:0 0 14px;font-size:12px}
+.netscope #ns-setup-form .cbi-value{display:grid;grid-template-columns:minmax(190px,.75fr) minmax(0,1.8fr);column-gap:28px;align-items:start;padding:16px 0;margin:0;border:0;border-bottom:1px solid #393939;background:transparent}
+.netscope #ns-setup-form .cbi-value:last-child{border-bottom:0}
+.netscope #ns-setup-form .cbi-value-title{float:none;width:auto;padding:10px 0 0;text-align:left;line-height:1.45;color:#e1e1e1}
+.netscope #ns-setup-form .cbi-value-field{float:none;width:auto;min-width:0;margin:0;padding:0}
+.netscope #ns-setup-form .cbi-value-field>input,.netscope #ns-setup-form .cbi-value-field>select,.netscope #ns-setup-form .cbi-value-field>textarea{display:block;width:100%;max-width:760px;box-sizing:border-box}
+.netscope #ns-setup-form .cbi-value-description{margin:6px 0 0;max-width:760px;overflow-wrap:anywhere}
+.netscope #ns-setup-form #ns-setup-tunnel,.netscope #ns-setup-form #ns-setup-hy2,.netscope #ns-setup-form #ns-setup-vless,.netscope #ns-setup-form #ns-setup-mieru{min-width:0}
+.netscope #ns-setup-form #ns-setup-tunnel>.cbi-value:first-child{border-top:1px solid #393939}
+.netscope #ns-setup-form .cbi-page-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin:18px 0 0;padding:0;border:0}
+.netscope #ns-setup-form .cbi-page-actions .cbi-button{min-width:240px}
+.netscope .ns-setup-button-row{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:10px 0 0}
+.netscope .ns-setup-button-row .cbi-button{margin:0;white-space:normal;line-height:1.25;text-align:center}
+.netscope #ns-setup-drafts .cbi-section-node{margin:0 0 12px;padding:18px 16px;border:1px solid #444;border-radius:9px;background:#252525;min-width:0}
+.netscope #ns-setup-drafts .cbi-section-node:last-child{margin-bottom:0}
+.netscope #ns-setup-drafts .cbi-section-node h3{margin:0 0 7px;color:var(--ns-accent);font-size:17px}
+.netscope #ns-setup-drafts .cbi-section-node p{margin:5px 0;color:var(--ns-muted);overflow-wrap:anywhere}
+.netscope #ns-setup-drafts .ns-setup-draft-actions{margin-top:12px}
+.netscope #ns-setup-drafts .ns-setup-draft-output{margin-top:12px;padding-top:10px;border-top:1px solid #3d3d3d;overflow-wrap:anywhere}
+.netscope #ns-setup-drafts .ns-setup-draft-output ul{margin:8px 0;padding-left:20px}
+.netscope #ns-setup-result #ns-setup-downloads{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}
+.netscope #ns-setup-voice-actions{margin:12px 0 2px}
+.netscope #ns-setup-voice-note,.netscope #ns-setup-voice-health{max-width:1100px;overflow-wrap:anywhere}
+.netscope #ns-setup-l2tp-status,.netscope #ns-setup-voice-status{display:block;margin:10px 0 0;padding:10px 12px;border-radius:7px;background:#202020;color:#d9d9d9;overflow-wrap:anywhere}
+@media(max-width:700px){
+  .netscope #netscope-setup form .cbi-section,.netscope #netscope-setup>fieldset.cbi-section{padding:18px 14px}
+  .netscope #ns-setup-form .cbi-value{grid-template-columns:1fr;row-gap:7px;padding:13px 0}
+  .netscope #ns-setup-form .cbi-value-title{padding:0}
+  .netscope #ns-setup-runtime-actions>span{flex-basis:100%;min-width:0}
+  .netscope .ns-setup-button-row .cbi-button{flex:1 1 180px;min-width:0}
+}
